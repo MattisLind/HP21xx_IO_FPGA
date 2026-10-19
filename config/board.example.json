@@ -1,0 +1,8 @@
+{
+  "part": "xc6slx9-2-tqg144",
+  "clock_pin": "P56",
+  "clock_hz": 50000000,
+  "led_pin": "P143",
+  "led_active_low": false,
+  "iostandard": "LVCMOS33"
+}

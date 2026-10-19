@@ -1,0 +1,8 @@
+ARG RUNTIME_IMAGE=hp21xx-ise:14.7-runtime
+FROM ${RUNTIME_IMAGE}
+
+# Curated Spartan-6 CLI installation extracted from the user's vendor archive.
+# Build context: build/ise (vendor files and license stay outside Git).
+COPY Xilinx /opt/Xilinx
+COPY Xilinx/Xilinx.lic /root/.Xilinx/Xilinx.lic
+ENV XILINXD_LICENSE_FILE=/opt/Xilinx/Xilinx.lic

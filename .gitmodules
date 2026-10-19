@@ -1,0 +1,3 @@
+[submodule "requirements/hp2116_verilog"]
+	path = hp2116_verilog
+	url = https://github.com/MattisLind/hp2116_verilog.git

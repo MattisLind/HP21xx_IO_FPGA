@@ -1,0 +1,11 @@
+/build/
+/config/board.local.json
+/toolchain/*.zip
+/toolchain/*.tar
+/toolchain/*.tar.gz
+/Xilinx_ISE_*.zip
+/config/toolchain.local.json
+/config/stm32.local.json
+*.lic
+*.LIC
+__pycache__/
