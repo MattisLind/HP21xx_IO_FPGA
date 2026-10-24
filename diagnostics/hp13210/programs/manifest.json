@@ -1,0 +1,78 @@
+{
+  "flags-14": {
+    "start_octal": "002000",
+    "words": 16,
+    "success": "HLT 00",
+    "error_halts_octal": {
+      "01": "SFC 14 did not skip after CLF",
+      "02": "SFS 14 skipped after CLF",
+      "03": "SFS 14 did not skip after STF",
+      "04": "SFC 14 skipped after STF"
+    }
+  },
+  "flags-15": {
+    "start_octal": "002000",
+    "words": 16,
+    "success": "HLT 00",
+    "error_halts_octal": {
+      "11": "SFC 15 did not skip after CLF",
+      "12": "SFS 15 skipped after CLF",
+      "13": "SFS 15 did not skip after STF",
+      "14": "SFC 15 skipped after STF"
+    }
+  },
+  "flags-both": {
+    "start_octal": "002000",
+    "words": 45,
+    "success": "HLT 00",
+    "error_halts_octal": {
+      "01": "SFC 14 did not skip after CLF",
+      "02": "SFS 14 skipped after CLF",
+      "03": "SFS 14 did not skip after STF",
+      "04": "SFC 14 skipped after STF",
+      "11": "SFC 15 did not skip after CLF",
+      "12": "SFS 15 skipped after CLF",
+      "13": "SFS 15 did not skip after STF",
+      "14": "SFC 15 skipped after STF",
+      "21": "STF 14 also set flag 15",
+      "22": "Flag 14 missing during isolation check",
+      "23": "STF 15 also set flag 14",
+      "24": "Flag 15 missing during isolation check"
+    }
+  },
+  "flags-both-delay": {
+    "start_octal": "002000",
+    "words": 81,
+    "success": "HLT 00",
+    "error_halts_octal": {
+      "01": "SFC 14 did not skip after CLF",
+      "02": "SFS 14 skipped after CLF",
+      "03": "SFS 14 did not skip after STF",
+      "04": "SFC 14 skipped after STF",
+      "11": "SFC 15 did not skip after CLF",
+      "12": "SFS 15 skipped after CLF",
+      "13": "SFS 15 did not skip after STF",
+      "14": "SFC 15 skipped after STF",
+      "21": "STF 14 also set flag 15",
+      "22": "Flag 14 missing during isolation check",
+      "23": "STF 15 also set flag 14",
+      "24": "Flag 15 missing during isolation check"
+    }
+  },
+  "scope-clear-14": {
+    "start_octal": "002000",
+    "words": 6,
+    "success": "operator stops loop",
+    "error_halts_octal": {
+      "01": "Missing skip with flag clear"
+    }
+  },
+  "scope-clear-15": {
+    "start_octal": "002000",
+    "words": 6,
+    "success": "operator stops loop",
+    "error_halts_octal": {
+      "01": "Missing skip with flag clear"
+    }
+  }
+}

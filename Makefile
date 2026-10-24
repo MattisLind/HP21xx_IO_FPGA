@@ -29,12 +29,16 @@ help:
 	@echo 'make flash-backup     - save and verify the original 2 MiB flash contents'
 	@echo 'make flash-program    - program/verify blink in flash after a verified backup'
 	@echo 'make controller-sim   - test HP13210 flags and mock-backend transactions at 50 MHz'
+	@echo 'make flag-diagnostics - generate offline HP select-code 14/15 flag tests'
 	@echo 'make controller-smoke - implement the full HP13210 port in ISE without a bitstream'
 	@echo 'make controller-build - build the located HP controller and FSMC test SPI boot image'
 	@echo 'make controller-program - back up current flash, then program/verify the controller'
 	@echo 'make stm32-doctor     - inspect STM32duino, ARM compiler, CMSIS and OpenOCD'
 	@echo 'make stm32-build      - build USB CDC/FSMC test firmware with CMake and Make'
 	@echo 'make stm32-program    - program verified firmware with ST-Link over SWD'
+	@echo 'make stm32-disk-deps  - fetch pinned STM32SD/FatFs libraries for the disk backend'
+	@echo 'make stm32-disk-build - compile the separate SDIO/FAT disk backend; no download'
+	@echo 'make stm32-disk-test  - run native disk-backend tests with sanitizers'
 
 doctor runtime-image runtime-check toolchain-check sim smoke usb-scan firmware-extract ise-image:
 	$(PYTHON) scripts/fpga.py $@
@@ -76,7 +80,10 @@ flash-backup:
 flash-program:
 	$(PYTHON) scripts/spi_flash.py program
 
-.PHONY: controller-sim controller-smoke
+.PHONY: controller-sim controller-smoke flag-diagnostics
+flag-diagnostics:
+	$(PYTHON) scripts/hp13210_flag_diagnostics.py
+
 controller-sim:
 	$(PYTHON) scripts/controller.py sim
 
@@ -102,3 +109,13 @@ stm32-build:
 
 stm32-program:
 	$(PYTHON) scripts/stm32.py program
+
+.PHONY: stm32-disk-deps stm32-disk-build stm32-disk-test
+stm32-disk-deps:
+	$(PYTHON) scripts/stm32_disk.py deps
+
+stm32-disk-build:
+	$(PYTHON) scripts/stm32_disk.py build
+
+stm32-disk-test:
+	$(PYTHON) scripts/stm32_disk.py test

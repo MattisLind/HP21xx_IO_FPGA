@@ -103,6 +103,8 @@ void setup() {
 void loop() {
   static bool enabled = false;
   static bool connected = false;
+  static uint32_t last_test = 0;
+  const uint32_t now = millis();
   const bool now_connected = bool(Serial);
   if (now_connected && !connected) {
     Serial.println("HP21xx FSMC test, STM32F407VE, HSE=8 MHz, HCLK=168 MHz");
@@ -115,8 +117,16 @@ void loop() {
     if (command == 't') {
       if (!enabled) fsmc_init();
       enabled = true;
+      last_test = now - 1000U;  // Run the first requested test immediately.
     } else if (command == 's') enabled = false;
   }
-  if (enabled && now_connected) test_pass();
-  delay(1000);
+  if (!enabled) {
+    // PA1 sinks current: 100 ms on every two seconds. Runs independently
+    // of USB CDC/DTR, proving startup and the system clock without a host.
+    digitalWrite(PA1, (now % 2000U < 100U) ? LOW : HIGH);
+  } else if (now_connected && uint32_t(now - last_test) >= 1000U) {
+    last_test = now;
+    test_pass();  // During tests, LED shows the most recent pass/fail result.
+  }
+  delay(1);
 }

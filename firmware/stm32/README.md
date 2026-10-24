@@ -18,8 +18,11 @@ describes this supported alternative.
   reference connection. Keep BOOT0 low for normal flash execution.
 - The user reports FSMC wire-wrapped according to the workbook. IRQ and DRQ
   remain deferred. No NE wire is required; the FPGA holds internal NE active.
-- Both programmers are disconnected. No hardware programming or FSMC hardware
-  test has been performed for this milestone.
+- The latest FPGA image is programmed into SPI flash and cold boot is accepted.
+  STM32 programming and verification passed on 2026-10-23 and the target was
+  reset to run. The user confirmed the PA1 heartbeat blinks on 2026-10-23.
+  Physical FSMC testing remains pending. Evidence: `build/stm32/programmed.json` and
+  `build/stm32-program.log`.
 
 ## Build
 
@@ -90,9 +93,16 @@ actively driven; the boards must be powered appropriately for the test.
 
 ## Run later, when the programmers are connected
 
+The firmware pulses the onboard active-low **PA1 LED for 100 ms every two
+seconds** while the FSMC test is stopped. It starts automatically after reset,
+including without a USB terminal or DTR. No FSMC accesses occur until `t` is
+received. Starting the test changes the LED to the latest pass/fail indication;
+`s` stops the test and restores the heartbeat.
+
 1. Build the matching FPGA image with `make controller-build`; program it
    separately with `make controller-program` when the FPGA JTAG is connected.
-   The previously installed FPGA image has its STM32 interface disabled.
+   The latest FPGA image was programmed into SPI flash and verified on
+   2026-10-23; physical FSMC read/write testing is still pending.
 2. Connect ST-Link and program with `make stm32-program`. This explicit target
    uses OpenOCD `interface/stlink.cfg` and `target/stm32f4x.cfg` and verifies the
    ELF before reset. Build targets never program either device.

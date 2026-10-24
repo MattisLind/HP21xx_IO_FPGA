@@ -1,0 +1,17 @@
+Address Word   Instruction       Meaning (all numbers octal)
+002000  103100 CLF  00     Disable CPU interrupts; not restored on exit
+002001  107714 CLC  14     Disable this interface control/interrupt request
+002002  103114 CLF  14     
+002003  102214 SFC  14     
+002004  102001 HLT  01     SFC 14 did not skip after CLF
+002005  102314 SFS  14     
+002006  026010 JMP  002010 
+002007  102002 HLT  02     SFS 14 skipped after CLF
+002010  102114 STF  14     
+002011  102314 SFS  14     
+002012  102003 HLT  03     SFS 14 did not skip after STF
+002013  102214 SFC  14     
+002014  026016 JMP  002016 
+002015  102004 HLT  04     SFC 14 skipped after STF
+002016  103114 CLF  14     
+002017  102000 HLT  00     PASS: all checks complete; do not continue beyond this halt

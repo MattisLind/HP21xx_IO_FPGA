@@ -13,6 +13,7 @@ simple LED blink design on the FPGA.
 | --- | --- |
 | [HP 21xx IO bus.xlsx](HP%2021xx%20IO%20bus.xlsx) | HP bus signals, directions, and FPGA pin mapping. |
 | [STM32F407VET.xlsx](STM32F407VET.xlsx) | STM32-to-FPGA pin mapping, including the FSMC bus. |
+| [13210-90003 hardware manual](13210-90003_13210A_Disc_Drive_Interface_Kit_May78.pdf) | Original interface theory and schematics; figure 5-2 contains selection, flags and SKF. |
 | [hp13210a.sv](../hp2116_verilog/hp13210a.sv) | Reference implementation of the FPGA-side HP 13210 interface. |
 | [tb_hp2116.sv](../hp2116_verilog/tb_hp2116.sv) | Behavioral reference for the STM32/FSMC master and higher-level HP 7900 disk operations. |
 | [Toolchain discussion](https://chatgpt.com/share/6ad24098-4704-83ed-a163-827fe3981cd2) | Proposed Docker/ISE build and native macOS programming workflow. |
@@ -20,6 +21,13 @@ simple LED blink design on the FPGA.
 The HDL reference baseline is submodule commit `f07b963`. The spreadsheets
 define the intended wiring; unresolved entries must be clarified before
 generating constraints for the affected signals.
+
+The initial HP 2100S diagnostic was mistakenly configured for data **15** /
+command **16**. On 2026-10-24 the user corrected this to **data 14 / command 15**,
+both octal. DSN 151302 then reported `E50 UNIT 0 MISSING-PRESENT NONE`, consistent
+with all drives starting not ready and no STM32 disk backend yet. The earlier
+E3 on channel 16 does not establish a command-selection fault. Physical HP bus
+operation is not fully accepted yet. See the [diagnostic analysis and standalone flag tests](../diagnostics/hp13210/README.md).
 
 ## Hardware and timing
 
@@ -103,7 +111,10 @@ On 2026-10-18, the user reported the FSMC interface wire-wrapped and five
 sources enable the 19 FSMC pins, add a 16-bit transport scratchpad at AD `0xE`
 (STM32 CPU address `0x6000001C`), and correct physical HP receiver/driver
 inversion. Both programming dongles are disconnected; programming is explicitly
-deferred. The installed image still predates these changes.
+deferred at that time. On 2026-10-23, the user confirmed the latest image works
+in SRAM, then it was programmed into SPI flash and verified twice following a
+verified full-flash backup. The user then confirmed the new LED pattern after
+power cycling on 2026-10-23; persistent boot of this revision is accepted.
 
 - **IF-07:** Provide an isolated full-width read/write scratchpad for FSMC
   bring-up. Tests shall cover fixed patterns, walking bits, retention, and
@@ -116,6 +127,24 @@ deferred. The installed image still predates these changes.
   High-level disk firmware and SD-card integration remain later milestones.
 
 See [STM32 build and test instructions](../firmware/stm32/README.md).
+
+- **FW-DISK-01 (2026-10-24):** Implement a separate STM32 disk-backend image
+  following the reference testbench's register protocol and command behavior.
+  Retain the existing USB/FSMC transport test and its build/program targets;
+  physical transport testing must precede loading the disk backend. No devices
+  are connected or to be accessed during this implementation task.
+- **FW-DISK-02:** Use the carrier's SDIO socket with FAT storage. Load drive
+  assignments for units 0–3 from a simple root configuration file and open
+  existing disk images under `/images`. Missing or invalid images remain
+  offline. Keep geometry and little-endian word layout compatible with the
+  testbench's raw images.
+- **FW-DISK-03:** Start with basic reads/writes, seek/address handling, ready
+  status and completion handshakes. Buffer transfers to avoid filesystem
+  calls during per-word FSMC service. Defer write protection and the
+  diagnostic's precisely timed DMA-overrun case; prioritize basic operation.
+
+The implementation, example configuration, dependency versions and current
+validation limits are in the [STM32 disk-backend guide](../firmware/stm32-disk/README.md).
 
 - **HW-LED-01 (2026-10-19):** Either assigned HP select code shall trigger a
   100 ms pulse on P143. A new selection during a pulse shall share that pulse
@@ -250,8 +279,7 @@ pulled up.
   drive remains inactive initially. EDT is corrected to an input on P123,
   matching the computer/DCPC-to-interface direction. HP bus pin 62 connects
   through receiver B5RI1 to FPGA P123; the former A4DO5 driver is spare.
-  The installed flash
-  image predates this EDT correction and must be updated before HP wiring.
+  The SPI flash image was updated on 2026-10-23 and includes this correction.
   Variant-specific
   `IOB16/BIOS` and `SFSB/BIOI` behavior also needs clarification.
 - STM32 spreadsheet: corrected `FSMC_NL`/NADV naming; interrupt and DMA request

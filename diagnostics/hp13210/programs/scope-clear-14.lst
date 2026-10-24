@@ -1,0 +1,7 @@
+Address Word   Instruction       Meaning (all numbers octal)
+002000  103100 CLF  00     Disable interrupts
+002001  107714 CLC  14     
+002002  103114 CLF  14     
+002003  102214 SFC  14     
+002004  102001 HLT  01     Missing skip with flag clear
+002005  026002 JMP  002002 Runs until operator HALT or failure

@@ -1,0 +1,14 @@
+{
+  "STM32SD": {
+    "version": "1.5.0",
+    "commit": "9b9bf7053c1d5b61758bd2fa415669233a7f1229",
+    "url": "https://codeload.github.com/stm32duino/STM32SD/zip/9b9bf7053c1d5b61758bd2fa415669233a7f1229",
+    "archive_sha256": "ad460dbc47822de9e8cddf7c9cd83028944007bdbda7403a32748d21e209179b"
+  },
+  "FatFs": {
+    "version": "4.0.4",
+    "commit": "cef1acad37d563e6b7dfd1c4fd3d48e7ff348947",
+    "url": "https://codeload.github.com/stm32duino/FatFs/zip/cef1acad37d563e6b7dfd1c4fd3d48e7ff348947",
+    "archive_sha256": "e840fee3fa1f7ab5e716dff31bc80c97c2b008d99eec3b8e24a62eeab2d4c3cf"
+  }
+}

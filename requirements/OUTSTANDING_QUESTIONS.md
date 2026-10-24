@@ -1,5 +1,68 @@
 # Outstanding questions
 
+## Q-07: STM32 FAT disk backend
+
+Status: implemented for offline build/host testing on 2026-10-24; no hardware
+connected or programmed. The existing USB/FSMC test remains the next hardware
+step, as requested by the user.
+
+- [x] Add a separate `firmware/stm32-disk` image, keeping the transport test's
+  sources, ELF and successful-build receipt unchanged during this task.
+- [x] Read `/hp13210.cfg` on FAT and map drive0–drive3 to existing images under
+  `/images`; valid images are writable, missing/invalid images stay offline.
+- [x] Port basic read/write, partial-sector filling, asynchronous seek,
+  check-data, status and attention handshakes. Poll CSR, preserving command
+  requests acknowledged by reads; IRQ/DRQ wires are not required.
+- [x] Use pinned STM32SD/FatFs dependencies and compile for the F407 carrier.
+- [x] Host-test the actual C++ protocol engine with sanitizers and mock media.
+- [x] Add short USB operation/result codes and E01–E16 errors, plus a bounded
+  nonblocking event queue and E99/drop accounting. USB drains only while idle;
+  firmware build and host tests cover runtime traces. Hardware trace output
+  remains unverified. Code meanings are in the backend guide.
+- [ ] Run the old USB/FSMC transport test and verify repeated passes.
+- [ ] Later load the backend, verify SD mounting and configuration, then
+  compare real-machine reads/writes against a disposable image's host bytes.
+- [ ] Validate read startup latency, data throughput and write completion on
+  hardware, then rerun HP diagnostics and test RTE II boot.
+- [ ] Add write protection and cylinder metadata later. The accurately timed
+  DMA-overrun diagnostic remains deferred by user request.
+
+See [backend build, configuration and limitations](../firmware/stm32-disk/README.md).
+
+## Q-06: HP 2100S diagnostic bring-up
+
+Status: corrected diagnostic select codes on 2026-10-24; E50 drive-not-ready
+result matches the missing disk backend. Analysis remains offline; no downloads.
+
+- [x] Identify diagnostic: DSN 151302, with original sources in the user's
+  Type 4 archive. E3 means SFC did not skip after CLF.
+- [x] Correct select codes: **data 14 / command 15**, octal. The earlier
+  diagnostic setting 15/16 was mistaken, so E3 on 16 does not establish an
+  actual command-channel fault.
+- [x] Clarify LED observation: idle heartbeat worked, selection response was
+  not observed. Configuration/clock activity is present; selection remains
+  unverified.
+- [x] Locate the exact check and common error halt. M=012135/data=102001,
+  P=012136 and A=3 match the diagnostic's E3 reporting path.
+- [x] Add independent flag tests for 14/15, paired/isolation tests, a delayed
+  variant and repeatable scope loops. Offline instruction-flow and tape-format
+  checks are available; these are not hardware acceptance tests.
+- [x] Inspect the supplied 13210-90003 hardware manual. Figure 5-2 confirms
+  the connector pins and separate selection/flag/skip paths.
+- [x] Trace retest `E50 UNIT 0 MISSING-PRESENT NONE`: status reports unit 0
+  not ready and no ready alternatives among units 0–3. HLT 6 at 002557,
+  P=002560 and A=0 match the first-pass E50 halt path. All four drives start
+  not ready; STM32 firmware currently provides no disk backend.
+- [ ] Run the small tests on 14/15 and record each halt; verify physical
+  read/write transport and timing before accepting full HP bus operation.
+- [ ] Implement STM32 drive status and command servicing to bring a real
+  emulated drive online; clearing not-ready alone is not a disk backend.
+- [ ] Review POPIO behavior: hardware section 4-5 specifies setting both
+  flags; the port sets the buffers and clears flags until ENF. This is a
+  separate equivalence question, not an established explanation for E3.
+
+See [failure analysis and test instructions](../diagnostics/hp13210/README.md).
+
 ## Q-01: SPI flash auxiliary pins and boot-mode straps
 
 Status: resolved by the user's hardware inspection, reported on 2026-10-17.
@@ -71,15 +134,33 @@ Status: partly resolved on 2026-10-17; hardware timing and integration pending.
 - [x] EDT is a computer/DCPC-to-interface input. The workbook and wrapper
   now treat P123 as an input; the core currently ignores it. Assigned unused
   receiver B5RI1: HP bus pin 62 → B5RI1 → FPGA P123. A4DO5 is now spare.
-- [ ] Update the installed controller image before HP bus connection:
-  the previously flashed image predates the EDT and polarity corrections and
-  has FSMC disabled. Builds do not reprogram flash. Both programming dongles
-  are currently disconnected; the user explicitly deferred programming.
+- [x] Update the installed controller image: on 2026-10-23 the user confirmed
+  the SRAM-loaded image works, then authorized SPI flash programming. The latest
+  image includes EDT/polarity corrections, FSMC and the activity/idle LED.
+  The previous 2 MiB image was backed up and verified; programming and a second
+  verification passed, and reload from flash was requested.
 
 ## Q-04: Future STM32 interface wiring and timing
 
-Status: FSMC wire-wrapped on 2026-10-18; firmware transport test added,
-hardware programming and read/write verification pending.
+Status: FSMC wire-wrapped on 2026-10-18; both devices programmed and verified
+on 2026-10-23. Physical read/write verification remains pending.
+
+Update 2026-10-23: the latest validated FPGA image, including the FSMC
+scratchpad, physical HP polarity fixes and 100 ms activity/two-second idle LED,
+was successfully downloaded over JTAG into volatile SRAM. The FPGA was detected
+as XC6SLX9 revision C, IDCODE 0x24001093. SPI flash was not modified; a power
+cycle would still load the older flash image at that point. STM32 programming and physical
+FSMC read/write testing remain pending. Download evidence is in
+`build/controller-board/sram-downloaded.json` and `sram-download.log`.
+
+Later on 2026-10-23, SPI flash was updated to this same working image and
+verified twice. Flash status remains SR1/SR2/SR3 = 00/02/60. The latest receipt
+is `build/controller-board/programmed.json`. STM32 programming and physical
+FSMC testing remain pending.
+
+- [x] The user confirmed on 2026-10-23 that the latest 100 ms / two-second idle
+  LED pattern starts automatically after power cycling. Persistent boot of
+  this newly programmed revision is accepted; physical HP/FSMC tests remain.
 
 - [x] Carrier identified as DevEBox STM32F4XX-M / STM32F407VET6, 8 MHz HSE;
   USB directly on PA11/PA12. ST-Link will program via SWD.
@@ -102,9 +183,21 @@ hardware programming and read/write verification pending.
   permanently active. The current carrier top enables FSMC and holds NE low.
 - [x] Define conservative initial STM32 FSMC timing at 168 MHz; see
   [firmware bring-up](../firmware/stm32/README.md).
-- [ ] Connect programmers later, load matching images, and verify repeated
-  USB-reported FSMC tests and physical timing. Neither device has been
-  programmed in this milestone; full STM32 disk firmware remains deferred.
+- [x] Program and verify the STM32 USB/FSMC test firmware via ST-Link/SWD.
+- [x] The user confirmed the STM32 PA1 heartbeat blinks on 2026-10-23.
+- [ ] Verify repeated USB-reported FSMC tests and physical timing.
+  Full STM32 disk firmware remains deferred.
+
+Update 2026-10-23: FPGA programming and cold boot are accepted. Replacing the
+suspected charge-only USB cable resolved ST-Link USB detection: 0483:3748,
+firmware V2J37S7. OpenOCD now opens the probe, but cannot connect to the target
+and initially reported target voltage 0 V. After the user reconnected/powered
+the target, OpenOCD detected Cortex-M4, device ID 0x101f6413, 512 KiB flash,
+and 3.39 V. Programming and verification succeeded and the target was reset
+to run. The automatic PA1 heartbeat is 100 ms on every two seconds,
+independently of USB/DTR. The user confirmed the LED blinks; FSMC
+accesses still require the explicit `t` command and have not been run.
+Evidence: `build/stm32/programmed.json` and `build/stm32-program.log`.
 
 ## Q-05: Controller-image cold boot
 

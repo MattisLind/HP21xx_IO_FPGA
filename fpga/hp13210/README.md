@@ -6,6 +6,16 @@ reference passes disk diagnostics and boots RTE II in Verilator. The reference
 submodule is unchanged. This initial port has directed controller tests; those
 full-system diagnostics and RTE II have not yet been rerun against the port.
 
+The first physical HP 2100S diagnostic used the wrong 15/16 select-code pair
+and reported E3 on 16. On 2026-10-24 the user corrected the diagnostic to
+**data 14 / command 15** (octal) and reached `E50 UNIT 0 MISSING-PRESENT NONE`.
+This is consistent with the four drives starting not ready and the STM32 disk
+backend still absent. If E50 was the first error, both initial channel flag
+checks completed. Full physical HP bus acceptance remains pending. See the
+[diagnostic analysis and small flag tests](../../diagnostics/hp13210/README.md)
+for the exact sequences, hardware references and probe points.
+This investigation makes no downloads or HDL changes.
+
 ## Current scope
 
 `hp13210a_core.v` retains the reference's command/data channels, flag buffers,
@@ -26,8 +36,13 @@ and report completion/attention.
 
 The current carrier top enables this interface for the USB/FSMC transport test
 in [firmware/stm32](../../firmware/stm32/README.md). This test firmware does not
-implement the disk backend; the earlier flashed carrier image still has FSMC
-disabled and must be updated before testing the wired interface.
+implement the disk backend. This FSMC-enabled image was programmed into SPI
+flash on 2026-10-23 after successful SRAM bring-up.
+
+On 2026-10-24 a separate [STM32 FAT disk backend](../../firmware/stm32-disk/README.md)
+was implemented against this register map. It has not been loaded: first run
+the existing USB/FSMC transport test. The backend adds ready images and basic
+read/write command servicing; its hardware behavior is still unverified.
 
 ## ISE adaptations
 
@@ -154,13 +169,13 @@ existing LED pulse; a held selection suppresses
 the automatic heartbeat. At 50 MHz the pulse lasts 5,000,000 clocks and the
 idle period is 100,000,000 clocks. This indicates selection/configuration
 activity, not successful disk operations. These sources replace the earlier
-2 Hz heartbeat; the installed image is unchanged until explicitly programmed.
+2 Hz heartbeat. The updated image was programmed into flash on 2026-10-23.
 
 Flash chip select on P38 is held high after configuration. RUN drive on P138
 is held high (inactive); its receiver on P139 intentionally shares the same
 HP bus pin. EDT on P123 is an input and is currently ignored by the core.
-The previously flashed image predates the EDT and physical polarity corrections;
-rebuild and update it before HP bus connection. Historical build measurements
+The latest flash image includes the EDT and physical polarity corrections.
+Historical build measurements
 below describe that earlier image, not the corrected sources.
 HP outputs are gated during startup, with priority passed
 through while startup is held. Unconnected HP inputs receive weak inactive
@@ -202,7 +217,8 @@ the 20 ns clock group, with zero timing errors, a 6.377 ns minimum period,
 and 13.623 ns setup slack. BitGen generated the SPI boot image. Asynchronous
 pin paths are reported separately; these results do not establish external
 HP or STM32 bus setup/hold requirements. The updated design has not been
-programmed or tested on either physical bus.
+tested on either physical bus at that point. It was later programmed into
+flash with the updated LED behavior on 2026-10-23.
 
 The located FPGA-only controller image was programmed into the W25Q16JV on
 2026-10-17. A fresh full-flash backup of the prior blink image was saved and
@@ -252,8 +268,16 @@ deferred, with their pins reserved. Initial firmware will poll registers;
 the reference testbench does use `stm32_irq`. With one FSMC device, no external
 NE pin is required: hold internal NE active in the enabled backend and keep
 NADV/NOE/NWE idle high, including during STM32 reset. The current carrier source
-enables FSMC with this wiring; the earlier flashed image remains disabled.
+enables FSMC with this wiring and is now programmed into SPI flash.
 Initial STM32 timing and USB pattern-test instructions are in the
 [firmware guide](../../firmware/stm32/README.md). Physical FSMC timing needs
 verification independently of the HP bus's 200 ns pulse interval.
+
+On 2026-10-23 the user confirmed the latest SRAM image works. A fresh full
+2 MiB backup of the older flash image was saved and verified, then the latest
+bitstream was programmed and verified twice. Flash status stayed `00/02/60`;
+reload from flash was requested successfully. The receipt is
+`build/controller-board/programmed.json`. The user confirmed on 2026-10-23
+that the new 100 ms / two-second idle pattern returns after power cycling;
+persistent boot of this revision is accepted.
 See [outstanding questions](../../requirements/OUTSTANDING_QUESTIONS.md).

@@ -1,0 +1,46 @@
+Address Word   Instruction       Meaning (all numbers octal)
+002000  103100 CLF  00     Disable CPU interrupts; not restored on exit
+002001  107714 CLC  14     Disable this interface control/interrupt request
+002002  107715 CLC  15     Disable this interface control/interrupt request
+002003  103114 CLF  14     
+002004  102214 SFC  14     
+002005  102001 HLT  01     SFC 14 did not skip after CLF
+002006  102314 SFS  14     
+002007  026011 JMP  002011 
+002010  102002 HLT  02     SFS 14 skipped after CLF
+002011  102114 STF  14     
+002012  102314 SFS  14     
+002013  102003 HLT  03     SFS 14 did not skip after STF
+002014  102214 SFC  14     
+002015  026017 JMP  002017 
+002016  102004 HLT  04     SFC 14 skipped after STF
+002017  103115 CLF  15     
+002020  102215 SFC  15     
+002021  102011 HLT  11     SFC 15 did not skip after CLF
+002022  102315 SFS  15     
+002023  026025 JMP  002025 
+002024  102012 HLT  12     SFS 15 skipped after CLF
+002025  102115 STF  15     
+002026  102315 SFS  15     
+002027  102013 HLT  13     SFS 15 did not skip after STF
+002030  102215 SFC  15     
+002031  026033 JMP  002033 
+002032  102014 HLT  14     SFC 15 skipped after STF
+002033  103114 CLF  14     
+002034  103115 CLF  15     
+002035  102114 STF  14     
+002036  102315 SFS  15     
+002037  026041 JMP  002041 
+002040  102021 HLT  21     STF 14 also set flag 15
+002041  102314 SFS  14     
+002042  102022 HLT  22     Flag 14 missing during isolation check
+002043  103114 CLF  14     
+002044  102115 STF  15     
+002045  102314 SFS  14     
+002046  026050 JMP  002050 
+002047  102023 HLT  23     STF 15 also set flag 14
+002050  102315 SFS  15     
+002051  102024 HLT  24     Flag 15 missing during isolation check
+002052  103114 CLF  14     
+002053  103115 CLF  15     
+002054  102000 HLT  00     PASS: all checks complete; do not continue beyond this halt

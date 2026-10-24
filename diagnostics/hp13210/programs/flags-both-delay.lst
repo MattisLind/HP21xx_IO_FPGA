@@ -1,0 +1,82 @@
+Address Word   Instruction       Meaning (all numbers octal)
+002000  103100 CLF  00     Disable CPU interrupts; not restored on exit
+002001  107714 CLC  14     Disable this interface control/interrupt request
+002002  107715 CLC  15     Disable this interface control/interrupt request
+002003  103114 CLF  14     
+002004  000000 NOP  00     Extra settling time after flag operation
+002005  000000 NOP  00     Extra settling time after flag operation
+002006  000000 NOP  00     Extra settling time after flag operation
+002007  000000 NOP  00     Extra settling time after flag operation
+002010  102214 SFC  14     
+002011  102001 HLT  01     SFC 14 did not skip after CLF
+002012  102314 SFS  14     
+002013  026015 JMP  002015 
+002014  102002 HLT  02     SFS 14 skipped after CLF
+002015  102114 STF  14     
+002016  000000 NOP  00     Extra settling time after flag operation
+002017  000000 NOP  00     Extra settling time after flag operation
+002020  000000 NOP  00     Extra settling time after flag operation
+002021  000000 NOP  00     Extra settling time after flag operation
+002022  102314 SFS  14     
+002023  102003 HLT  03     SFS 14 did not skip after STF
+002024  102214 SFC  14     
+002025  026027 JMP  002027 
+002026  102004 HLT  04     SFC 14 skipped after STF
+002027  103115 CLF  15     
+002030  000000 NOP  00     Extra settling time after flag operation
+002031  000000 NOP  00     Extra settling time after flag operation
+002032  000000 NOP  00     Extra settling time after flag operation
+002033  000000 NOP  00     Extra settling time after flag operation
+002034  102215 SFC  15     
+002035  102011 HLT  11     SFC 15 did not skip after CLF
+002036  102315 SFS  15     
+002037  026041 JMP  002041 
+002040  102012 HLT  12     SFS 15 skipped after CLF
+002041  102115 STF  15     
+002042  000000 NOP  00     Extra settling time after flag operation
+002043  000000 NOP  00     Extra settling time after flag operation
+002044  000000 NOP  00     Extra settling time after flag operation
+002045  000000 NOP  00     Extra settling time after flag operation
+002046  102315 SFS  15     
+002047  102013 HLT  13     SFS 15 did not skip after STF
+002050  102215 SFC  15     
+002051  026053 JMP  002053 
+002052  102014 HLT  14     SFC 15 skipped after STF
+002053  103114 CLF  14     
+002054  000000 NOP  00     Extra settling time after flag operation
+002055  000000 NOP  00     Extra settling time after flag operation
+002056  000000 NOP  00     Extra settling time after flag operation
+002057  000000 NOP  00     Extra settling time after flag operation
+002060  103115 CLF  15     
+002061  000000 NOP  00     Extra settling time after flag operation
+002062  000000 NOP  00     Extra settling time after flag operation
+002063  000000 NOP  00     Extra settling time after flag operation
+002064  000000 NOP  00     Extra settling time after flag operation
+002065  102114 STF  14     
+002066  000000 NOP  00     Extra settling time after flag operation
+002067  000000 NOP  00     Extra settling time after flag operation
+002070  000000 NOP  00     Extra settling time after flag operation
+002071  000000 NOP  00     Extra settling time after flag operation
+002072  102315 SFS  15     
+002073  026075 JMP  002075 
+002074  102021 HLT  21     STF 14 also set flag 15
+002075  102314 SFS  14     
+002076  102022 HLT  22     Flag 14 missing during isolation check
+002077  103114 CLF  14     
+002100  000000 NOP  00     Extra settling time after flag operation
+002101  000000 NOP  00     Extra settling time after flag operation
+002102  000000 NOP  00     Extra settling time after flag operation
+002103  000000 NOP  00     Extra settling time after flag operation
+002104  102115 STF  15     
+002105  000000 NOP  00     Extra settling time after flag operation
+002106  000000 NOP  00     Extra settling time after flag operation
+002107  000000 NOP  00     Extra settling time after flag operation
+002110  000000 NOP  00     Extra settling time after flag operation
+002111  102314 SFS  14     
+002112  026114 JMP  002114 
+002113  102023 HLT  23     STF 15 also set flag 14
+002114  102315 SFS  15     
+002115  102024 HLT  24     Flag 15 missing during isolation check
+002116  103114 CLF  14     
+002117  103115 CLF  15     
+002120  102000 HLT  00     PASS: all checks complete; do not continue beyond this halt
