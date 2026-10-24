@@ -42,6 +42,53 @@ it to `.drc`, only BitGen was rerun against the verified routed design. Its
 successful output is in `bitgen-retry-container.log`, and the receipt preserves
 both source fingerprints. Subsequent `make smoke` runs use the corrected name.
 
+## Docker image recovery backup — Google Drive
+
+Backup links supplied by the user on **2026-10-24**, for recovery if the local
+Docker cache is lost or purged:
+
+| File | Download link |
+| --- | --- |
+| Docker image archive (described by the user as a ZIP archive) | [Google Drive image backup](https://drive.google.com/file/d/1t3V-1o7V5462pPJNT_7Uo5Q348tAdit7/view?usp=sharing) |
+| SHA-256 checksums | [Google Drive SHA256SUMS](https://drive.google.com/file/d/1UmIwX76gUjN4XRSI2xp8G-tPuodl-lwF/view?usp=sharing) |
+
+The intended backup contains both `hp21xx-ise:14.7` (complete ISE toolchain)
+and `hp21xx-ise:14.7-runtime` (runtime dependencies only). These links were
+recorded as supplied; the remote files have not been downloaded, their hashes
+have not been independently verified, and restoration has not yet been tested.
+
+To recover:
+
+1. Download both files, retaining their original filenames. Inspect
+   `SHA256SUMS` to identify the filename it covers.
+2. In the directory containing that file and `SHA256SUMS`, verify it:
+
+   ```sh
+   shasum -a 256 -c SHA256SUMS
+   ```
+
+3. Start Docker Desktop. If the download is an actual ZIP wrapper, extract it
+   to obtain the Docker image tar archive. Docker can load a tar or compressed
+   tar directly; substitute its actual filename below:
+
+   ```sh
+   docker image load -i <docker-image-archive.tar-or-tar.gz>
+   docker image ls hp21xx-ise
+   ```
+
+4. Confirm that tags `14.7` and `14.7-runtime` are present. From the repository
+   root, run `make runtime-check` and `make toolchain-check` to check the
+   restored environment without programming hardware.
+
+On this Mac, if `docker` is missing from PATH, use:
+
+```sh
+export PATH="/Applications/Docker.app/Contents/Resources/bin:$PATH"
+```
+
+Keep the repository and any local configuration backed up separately; an
+image archive does not include host-mounted project files.
+
 ## Commands available now
 
 From the repository root:
