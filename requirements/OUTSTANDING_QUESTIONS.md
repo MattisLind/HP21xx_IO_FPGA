@@ -53,6 +53,12 @@ result matches the missing disk backend. Analysis remains offline; no downloads.
   not ready and no ready alternatives among units 0–3. HLT 6 at 002557,
   P=002560 and A=0 match the first-pass E50 halt path. All four drives start
   not ready; STM32 firmware currently provides no disk backend.
+- [x] Trace the normal path before E50. With no earlier errors/continued halts,
+  both channels passed flag and STF selection-isolation checks, command channel
+  15 passed HP interrupt/acknowledgement checks, and startup completed repeated
+  status plus four two-word ADDRESS RECORD handshakes. The direct all-not-ready
+  path makes 16 status requests in total. Disk-test sections and DMA transfers
+  have not started; this is not full data-path or disk acceptance.
 - [ ] Run the small tests on 14/15 and record each halt; verify physical
   read/write transport and timing before accepting full HP bus operation.
 - [ ] Implement STM32 drive status and command servicing to bring a real

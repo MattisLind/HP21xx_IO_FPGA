@@ -38,6 +38,112 @@ checks are the standalone 14/15 flag tests and FSMC register transport,
 followed by implementing real drive status and command servicing in STM32.
 No device access or programming was performed for this analysis.
 
+## Operations before the E50 halt
+
+The following is the normal fresh-start path to the reported halt, with data
+select code **14** and command select code **15**, both octal. A check is
+described as passed **assuming E50 was the first error and no earlier error
+halts were continued through**. Reaching E50 alone is not a saved transcript:
+the diagnostic can report errors and continue depending on switch settings.
+
+The controlling source is `12960-18003_Rev-1805.src`: startup at lines 55–116,
+the presence check at 347–408, and `CTEST` at 525–612. The helper routines are
+in `12960-18001_Rev-1805.src`: `SEEK`/`SEEH` at 580–605, `STAT`/`COMMD` at
+607–638, `DADO`/`WAITD` at 640–661 and `WAITS`/`WAIH` at 667–701.
+The reference binary also contains the flag/selection/interrupt tests at
+`002724`–`003043`; this is not an inference based only on the error message.
+
+### 1. Flags and selection, first 14 then 15
+
+`H35` calls `CNVS`/`CTEST` first for the data channel, then for command.
+For **each** channel it outputs an intentionally illegal disk-command word
+(`M1024`, -1024 decimal, octal `176000`) without starting a disk operation,
+then makes these explicit checks:
+
+| Instructions/check | Expected result | Error if wrong |
+| --- | --- | --- |
+| CLF, then SFS | No skip with the flag clear | E2 |
+| CLF, then SFC | Skip with the flag clear | E3 |
+| STF, then SFC | No skip with the flag set | E4 |
+| STF, then SFS | Skip with the flag set | E5 |
+| Clear this channel, STF every other select code from 10 through 77, SFS this channel | This channel stays clear | E57 |
+
+The last test excludes only the channel currently being tested. It therefore
+checks both that 14 and 15 are independent of each other and that STF to other
+codes in that range does not set their flags. It is a selection-isolation test,
+not an exhaustive test of every command or data-bit pattern.
+
+### 2. Command-channel HP interrupt handling
+
+The data channel returns before this part; **command channel 15** executes it.
+The diagnostic installs an interrupt trap instruction in location 15, sets
+control and flag with STC/STF 15, and enables CPU interrupts. It deliberately
+executes instructions that defer interrupt recognition, including indirect
+JMP/JSB sequences. It then checks:
+
+- An interrupt is received (otherwise E6).
+- The interrupt's saved return address is the expected instruction boundary
+  (otherwise E7). This verifies capture of the return address, not an OS's
+  full interrupt-return procedure.
+- Re-enabling interrupts after acknowledgement does not immediately generate
+  another interrupt from the acknowledged request. The original trap-cell
+  halt is restored before this check, so a spurious interrupt can halt there.
+- After STC/STF 15, CLC 0 clears interface controls and suppresses the pending
+  interrupt when CPU interrupts are enabled again.
+
+Thus the run provides evidence for the HP command-channel interrupt path,
+acknowledgement and control gating as well as flag/skip logic. It does not
+test arbitration between simultaneously requesting peripheral cards, or the
+STM32-side IRQ/DRQ connections.
+
+### 3. Initial status queries and latched-status cleanup
+
+The startup loops then visit all four drive numbers, 0–3:
+
+1. `INST1`/`INST3` calls `STAT` and checks ready/busy. A ready-and-busy drive
+   is polled again; a not-ready drive moves on without that wait.
+2. `HLP2` reads each drive's status again. A ready drive would take the seek
+   path; a not-ready drive takes `HLP3`, which issues **ADDRESS RECORD** through
+   `SEEH` to clear latched status. This is not a mechanical SEEK RECORD.
+3. `SEEH` sends a cylinder word on data channel 14, sends the alternate-position
+   command (`130000` octal, command nibble B) on command channel 15, waits for
+   the data flag, sends the head/sector word, and waits for the data flag again.
+   The normal fresh-start values are zero cylinder/head/sector. A missing or
+   late data response would produce E63/E11.
+4. `WAIH` waits up to approximately 2 ms for command completion (E10 if absent),
+   reads the command-channel attention word with LIA 15, then calls `STAT`.
+   That attention word is stored here, not checked against a nonzero pattern.
+
+Each `STAT` operation performs STC 14,C to prepare data input, OTA 15 with the
+status command plus drive number, CLC 15 and STC 15,C to start it, waits for the
+data flag (E12 if missing), then reads the status word using LIA 14. These are
+actual command-output/status-input handshakes through the board. They do not
+prove that all 16 data bits carry arbitrary patterns correctly.
+Because all four units return the same not-ready condition and the initial
+address arguments are normally zero, this also does not prove that drive
+selection or nonzero cylinder/head/sector values are decoded correctly.
+
+On the direct path with all four drives immediately not ready, these loops
+perform **12 status requests and four ADDRESS RECORD sequences** before the
+presence check. The presence check adds another four status requests: unit 0,
+then alternatives 1–3. That is **16 status requests in total** on this path;
+extra polling or a restart can increase the count. This is a source-derived
+count, not a captured bus trace.
+
+### 4. The first drive-presence check fails
+
+`SCAL1` calls `SW2` before entering the selected disk-test section. `SW2`
+finds not-ready set for unit 0, then finds no ready alternatives among units
+1–3. It reports E50 and, with pass count zero, executes the observed HLT 6.
+
+At this point **none of the five main disk-test sections has started** on the
+normal path. There has been no verified sector read/write, DMA disk transfer,
+CRC/data-pattern check, mechanical seek completion on a ready drive, or timed
+DMA-overrun test. The successful work is nevertheless substantial: both
+channels' flags and selection isolation, the command-channel HP interrupt
+checks, repeated status transactions, and the not-ready initialization path's
+two-word ADDRESS RECORD and completion handshakes.
+
 ## Earlier E3 report with the wrong diagnostic configuration
 
 The first real-machine test reported:
