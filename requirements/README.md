@@ -2,6 +2,10 @@
 
 Initial requirements baseline: 2026-10-16.
 
+For current bring-up state and continuation on another computer, read the
+[Codex handover](../HANDOVER.md), updated 2026-10-25. It distinguishes installed
+firmware from offline fixes and lists migration files and next diagnostic steps.
+
 Build an HP 21xx I/O board that implements an HP 13210 disk interface using
 an FPGA for the bus-facing logic and an STM32 for higher-level disk operations
 backed by an SD card. The first milestone is to build, download, and run a

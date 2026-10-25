@@ -1,0 +1,361 @@
+# HP 2100 / HP13210 emulator: Codex handover
+
+Updated **2026-10-25**, Europe/Oslo. Read this first when continuing on the
+laptop beside the HP 2100. This is a summary of the conversation and actual
+bring-up state; some older README status paragraphs describe earlier stages.
+
+## Start here
+
+The user is moving development to a laptop near the HP 2100S so that both
+programmers and both serial connections can be used together. At the end of
+this session the programmers were elsewhere/disconnected. **Do not assume
+devices are connected or a diagnostic has stopped.** Wait for the user to
+confirm the new setup before hardware access. No programming was performed
+after the diagnostic failures described below.
+
+The next task is to install the already prepared STM32 correction, capture
+both serial logs, and find why unsupported disk command values reach the
+STM32. Do not treat the emulator as operational merely because the FAT card
+mounts, images are READY, or host tests pass.
+
+Latest existing implementation commit at handover preparation:
+**`ce393f4` — Updates and bugfix to STM32 firmware**. Check the actual checkout
+on the laptop; this handover document may be newer than that commit. The
+reference submodule has untracked files on the original machine; inspect them
+before cleanup. Do not discard user work or edit the reference submodule as
+part of routine port maintenance.
+
+## Purpose and architecture
+
+- Emulate the HP 13210A / HP 7900 disk interface for an initial HP 2100S host.
+- Spartan-6 handles HP bus selection, flags, interrupts, status, data buffers,
+  and low-level command/data handshakes.
+- STM32 handles drive state, seek workers and disk image reads/writes on FAT SD.
+- The behavioral reference is `hp2116_verilog/tb_hp2116.sv`, especially
+  `stm32_firmware_daemon` and its seek workers. The user reports that the
+  reference passes diagnostics and boots RTE II under Verilator.
+- Reference submodule baseline is
+  `f07b9637157b990d54c7959e7d8c0b1c27f18a61`. It was moved out of requirements
+  to the repository top level. Its SystemVerilog is reference material;
+  modified Verilog-2001 copies live under `fpga/hp13210/` for ISE 14.7.
+- Board clock is 50 MHz; the reference simulation used 100 MHz. The user reports
+  a shortest HP bus pulse of 200 ns. Timing equivalence is not yet established.
+
+## Hardware and wiring
+
+| Item | Confirmed details |
+| --- | --- |
+| FPGA | XC6SLX9, speed grade -2, TQG144; ISE part `xc6slx9-2-tqg144` |
+| FPGA clock / LED | 50 MHz P56; active-high LED P143 |
+| I/O standard | 3.3 V LVCMOS33 |
+| FPGA programmer | Xilinx Platform Cable USB DLC9G clone, xc3sprog `xpc` backend |
+| JTAG identity | IDCODE `0x24001093`, XC6SLX9 revision C |
+| SPI flash | Winbond W25Q16JVSIQ, 2 MiB, JEDEC `EF 40 15` |
+| Flash pins | CS=P38, CLK=P70, flash pin 2/MISO=P65, pin 5/MOSI=P64 |
+| Flash boot straps | P60/M1 pulled low; P69/M0 pulled high |
+| Other carrier wiring | Flash pins 3 and 7 NC; button connected to FPGA P59 |
+| STM32 | DevEBox STM32F4XX-M, STM32F407VET6, 512 KiB flash |
+| STM32 clocks / LED | 8 MHz HSE, 168 MHz CPU, 48 MHz USB; active-low PA1 LED |
+| STM32 programmer | ST-Link clone over SWD: PA13 SWDIO, PA14 SWCLK, common GND; BOOT0 low |
+| STM32 debug USB | Direct USB FS on PA11/PA12, USB CDC output |
+| SD socket | SDIO PC8–PC11 data, PC12 clock, PD2 command |
+| HP select codes | **Data 14, command 15, both octal** |
+
+Pin workbooks are `requirements/HP 21xx IO bus.xlsx` and
+`requirements/STM32F407VET.xlsx`. These and the located FPGA constraints are
+the detailed wiring authority. Earlier HP bus P70 assignment conflicted with
+flash clock and was corrected; EDT was moved from an output to an unused
+receiver. Consult the updated workbook rather than early conversation values.
+
+Both HP receivers and drivers invert; the physical FPGA wrapper compensates
+for both. A high driver input is the inactive bus condition. Driver-module
+pull-ups to +5 V were removed by the user; planned replacements are 4.7 kΩ
+to 3.3 V. **Their installation has not been confirmed in this conversation.**
+ACT inputs must not be assumed to have a defined state when floating.
+RUN has separate receiver and driver FPGA pins P139/P138 on the same HP bus
+signal. General interrupt and DMA request features were deferred; EDT is input.
+
+## What has worked on hardware
+
+1. ISE synthesis, implementation, timing and bitstream generation in Docker.
+2. FPGA SRAM programming and visible blink; custom JTAG-to-SPI bridge, flash
+   backup/program/readback, and automatic cold boot from flash.
+3. Full HP13210 FPGA port programmed into flash. The activity LED gives a
+   100 ms pulse for either selected channel; selection resets the idle timer.
+   Without activity, the same pulse occurs every two seconds.
+4. STM32 programming and two-second LED heartbeat through ST-Link.
+5. STM32 USB/FSMC scratch transport test: user photo shows 19 passing loops,
+   each 294 patterns and 588 reads, zero failed passes: 5,586 writes and
+   11,172 reads. This tests one register; it does **not** prove correct
+   switching between register addresses or full disk protocol timing.
+6. Disk backend programmed on 2026-10-25. Prepared SD card now mounts on the
+   STM32 and all four configured images report READY.
+
+Full hardware disk reads/writes, diagnostic acceptance, and RTE II boot have
+**not** passed. Directed FPGA simulation and native backend tests are useful
+but do not establish those outcomes.
+
+## Installed versus prepared firmware — critical distinction
+
+| Artifact | State / SHA-256 |
+| --- | --- |
+| FPGA controller bitstream | SPI flash compared successfully on 2026-10-25; `3f8b76e5db2ea251ce3645cf7540c7ddaf0d7c71052fc543d5a6a788211e0fe6` |
+| STM32 disk ELF actually programmed | `775edf788a421f3e4298415433ebea71d96b82c2f5b35b4bb23a84e23e537dc7` |
+| Corrected STM32 disk ELF built offline | `c03d0afc193d8c365285d9a3fe3e7da929ca48712fdabd8add7e2ec0057cca34`; **not downloaded** |
+
+ELF hashes identify original-machine builds; a different toolchain/path may
+produce a different hash. Keep build receipts and source fingerprints together.
+No FPGA HDL change was made in response to the recent failures.
+
+The installed STM32 version mishandles unsupported commands: it sets data-error,
+generates attention, and completes the HP command (`??`, `E04`, `CM`). The
+reference daemon's default case ignores them. The prepared correction logs
+`??`/`E04` but performs no HP status/attention/completion writes. A regression
+test verifies this and valid seek completion afterward. **This fixes a real
+software difference but does not explain the unsupported command values.**
+
+Prepared firmware also adds retained raw register observations to USB `?`:
+`csr`, `request`, `command`, `rar`, and `last_error`. These are latest observations,
+not an atomic capture or necessarily the command which caused a retained error.
+Reporting does not issue extra destructive CSR reads. Native sanitizer tests
+and ARM build pass; latest build used 47,212 bytes flash and 22,696 bytes RAM.
+
+The separate old scratch-test firmware still exists in `firmware/stm32/`.
+Its repeated-`t` scheduling bug was fixed offline too; the disk firmware has
+no scratch-test loop. Use **stm32-disk** targets for the current work.
+
+## Diagnostic evidence and interpretation
+
+Diagnostic: **DSN 151302**, HP 7900/7901 cartridge disc memory diagnostic.
+Original source archive supplied by user:
+http://bitsavers.informatik.uni-stuttgart.de/bits/HP/HP_1000_software_collection/master-files/type-4.zip
+
+The archive and extracted `12960-18001_Rev-1805.src` through part 08 are under
+ignored `build/reference/hp-diagnostics/`. The diagnostic ABS binary is also
+in the reference submodule. Hardware manual:
+`requirements/13210-90003_13210A_Disc_Drive_Interface_Kit_May78.pdf`.
+Detailed source analysis is in `diagnostics/hp13210/README.md`.
+
+Chronological results:
+
+1. E3 `SFC FAILED WITH FLAG CLEAR-CHANNEL 16`, P=012136, M=012135,
+   M DATA=102001, A=3, B=4. **Invalid configuration evidence**: user supplied
+   data 15 instead of 14. Idle heartbeat worked but no selection response.
+2. Correct data14/command15: E50 `UNIT 0 MISSING-PRESENT NONE`, P=002560,
+   A=000000, B=000040, M=002557, M DATA=102006. Expected then: no STM32 disk
+   backend, all drives not-ready. Assuming no earlier errors were continued,
+   initial flag/selection and command-channel interrupt checks passed, plus
+   status/address-record handshakes. No disk transfer was validated.
+3. With FAT backend and images: H44 `SEEK IN STEP 02`, E21 `MISSING OR
+   DUPLICATE ATTENTION BIT`, H51 cylinder/head/sector/word count zero, unit0.
+   Section 1 step1 checks initial status; step2 seeks cylinder0 and checks
+   attention. This particular source path scans the rightmost low-four bit,
+   so E21 means missing or wrong-unit attention; it does not reject every
+   multi-bit pattern. Raw attention value was not captured.
+4. Latest run after leaving custom-test entry: H35 `INITIAL STATUS IN STEP 01`,
+   E64 `STATUS IS 000003 SHOULD BE 000000`, same zero H51 fields, unit0.
+   **HP status bit1=data error, bit0=aggregate error**. This is not drive busy.
+   Installed unsupported-command handling can create this status. No evidence
+   yet of an SD read failure. This run stopped before the seek test.
+
+STM32 photo before diagnostics showed `commands=136 errors=136 trace_dropped=0`
+with HP connected but idle. Subsequent traces show `D3 ?? D3 E04 D3 CM` and
+`D0 ?? D0 E04 D0 CM`. `E04` is the STM32 unsupported-command code, unrelated
+to HP diagnostic E4. No raw unsupported command word is known yet. Historical
+counters do not establish that the HP is still issuing requests while idle.
+
+Diagnostic operator controls checked against source:
+
+- Execution switch-register **bit2**, octal mask `000004`: configuration
+  tables/questions. Clear it to leave configuration. H24 displays cylinder
+  table 0,1,2,4,8,16,32,64,128,202 **decimal**, valid for this drive.
+- H25 WISH TO CHANGE? accepts uppercase `N` (then Enter) to retain a table.
+- H62 head mode `C` alternates heads0/1 and2/3.
+- Execution **bit3**, octal `000010`: operator-designed custom test. This
+  caused H55 ENTER INSTRUCTIONS. Clear bit3, then type `EN` + Enter; source
+  checks bit3 after recognizing an opcode and aborts to normal startup.
+- Switch register `000000` is suitable for initial standard bring-up and
+  halts on errors (bit14 clear). Configuration-time select-code input is a
+  different phase; do not leave the select-code value in execution switches.
+- Later tests write disk data: use disposable image copies.
+
+Possible further causes, **not established**: FSMC address-switching/read
+timing, or command register changing between IRQ acknowledgement and capture.
+The FPGA raises a flag during RAR handshake before the firmware's 4 ms seek
+attention; the reference HDL has the same behavior. Do not change it solely
+on speculation. Reference simulation success remains an important constraint.
+
+## FSMC register interface
+
+16-bit multiplexed asynchronous interface. No NE wire: FPGA internal NE is
+held active. NADV=PB7/P75, NOE=PD4/P79, NWE=PD5/P78. Full AD pin mapping is
+in the workbook and `firmware/stm32/README.md`. STM32 timing uses ADDSET15,
+ADDHLD15, DATAST63, BUSTURN15 at168 MHz for the FPGA's50 MHz sampling.
+
+| AD address | CPU address | Meaning |
+| --- | --- | --- |
+| 0x00 | 0x60000000 | CSR: bit7 command IRQ, bit6 data IRQ; **read acknowledges command IRQ** |
+| 0x02 | 0x60000004 | Command/status: command nibble15:12, drive1:0, seek-aborted5:2 |
+| 0x04 | 0x60000008 | Data; access acknowledges data IRQ |
+| 0x06 | 0x6000000C | Attention; writes OR low4 bits; even zero write completes an HP command |
+| 0x08 | 0x60000010 | Set status: drive15:14 + status mask |
+| 0x0A | 0x60000014 | Clear status: drive15:14 + status mask |
+| 0x0C | 0x60000018 | RAR: cylinder14:7, head6:5, sector4:0 |
+| 0x0E | 0x6000001C | Isolated scratch register |
+
+CPU byte offsets are twice AD addresses. **STM32 SET/CLEAR status packing
+differs from the HP returned status word**: STM32 data-error mask is bit0,
+busy bit1, etc.; the HP returned word inserts aggregate error at bit0.
+CSR output-enable bits8/9 gate physical IRQ pins, not readable raw IRQ flags.
+Only low four address bits are decoded; higher addresses alias.
+
+## SD card and backend scope
+
+FAT16/FAT32, `/hp13210.cfg` at root:
+
+```ini
+drive0=drive0.img
+drive1=drive1.img
+drive2=drive2.img
+drive3=drive3.img
+```
+
+Images are under `/images/`, exactly **4,988,928 bytes** each:
+203 cylinders ×4 heads ×24 sectors ×128 little-endian16-bit words.
+Offset `(((cylinder*4)+head)*24+sector)*256`. Files opened read/write, not
+created or resized. Configuration accepts strict plain filenames, `none` for
+offline; see backend README for validation. Reset STM32 to reload configuration.
+
+The user-supplied 8 GB `7900EMU` card was prepared successfully. An initial
+macOS mount/fsck problem later disappeared; the proposed format was rejected
+and **never performed**. Same volume then passed a read-only filesystem check.
+All four images were moved into `/images` without content changes. Original
+SHA-256 drive0: `849bb72d0d2cb0966636279920e5795ea77f999d453dcafdc2d040dd64ef1b68`;
+drive1/2/3: `404d1e4e239ae179cf1433e43deae10b3b14cc7c753c529799ed25ecf6f63f22`.
+Use the saved receipt for authoritative hashes (and rehash if images have
+subsequently been written). Do not reuse old `/dev/diskN` assignments on a new
+host or reformat this card as routine setup.
+
+Firmware has basic read/write, partial-sector zero-fill, check-data, refine,
+4 ms independent seeks, 12 KiB transfer buffer, CSR polling and one pending
+command slot. Availability refresh handles HP POPIO resetting not-ready.
+Writes sync FAT before completion. Media errors quarantine drives until reset.
+Write protection/cylinder metadata are deferred. Exact timing-dependent DMA
+overrun diagnostic behavior is deferred by user request. No RTOS, SD DMA,
+USB mass-storage or hot-swap support. USB logging is bounded/nonblocking and
+drains only when backend idle; `?` reports status, errors and dropped events.
+
+## Laptop environment and transfer
+
+Transfer the checkout including this document, not just an older remote HEAD.
+A Git clone does not include ignored `build/`, local config, backups or
+downloaded dependencies. Preserve those separately. Never commit proprietary
+tool archives, licenses or multi-gigabyte Docker backups merely for migration.
+
+Important ignored evidence/artifacts on the original Mac:
+
+- `build/stm32-disk/programmed.json` versus `success.json`: installed versus
+  latest built firmware; `firmware/disk_backend.{elf,bin,hex,map}`.
+- `build/stm32-disk/backups/disk-backend-before-e04-fix-20261025/`: original
+  disk-backend artifacts and receipts retained before the offline correction.
+- `build/stm32-disk/backups/before-disk-backend-20261025T162253304932Z.bin`:
+  verified512 KiB old scratch-test flash backup, SHA-256
+  `5015ff3643d9773c9e78eb4a04c66a2752997a65a926776c58ead324efb2cddf`.
+- `build/controller-board/`: validated bitstream, receipts, flash comparison;
+  also preserve original flash backup directories under `build/`.
+- `build/reference/hp-diagnostics/`: source archive/extraction and manuals.
+- `build/sd-card-inspection/7900EMU-prepared.json`: original image hashes.
+- `build/firmware/xusb_emb.hex`: DLC9G RAM firmware, extracted from ISE.
+- `config/toolchain.local.json`, `config/board.local.json`, and any
+  `config/stm32.local.json`: ignored machine-specific configuration.
+
+Do **not** reuse copied CMake build directories on another path/OS/CPU:
+they contain absolute paths and core symlinks. Archive evidence separately,
+then create fresh host build directories and reinstall native dependencies.
+The laptop OS is not yet confirmed. Scripts were exercised on macOS ARM;
+Linux needs native tool packages, device permissions and path configuration.
+
+STM32 builds use STM32duino **2.9.0**, xPack GNU Arm GCC **13.2.1-1.1**,
+CMSIS **5.9.0**, CMake >=3.21, Make, Python3 and a native C++ compiler.
+OpenOCD **0.12.0-4** was used. On non-Mac hosts configure explicit absolute
+`core`, `compiler` (bin directory), `cmsis`, `openocd` paths in
+`config/stm32.local.json`; see `firmware/stm32/README.md`. Scripts default to
+the Mac's `~/Library/Arduino15/packages` layout, not Linux's Arduino location.
+Pinned STM32SD1.5.0/FatFs4.0.4 are fetched by `make stm32-disk-deps` using
+`firmware/stm32-disk/dependencies.json` checksums. This retains Arduino library
+access with conventional CMake/Make builds rather than Arduino IDE workflows.
+
+ISE runs in amd64 Linux Docker; native host tools handle JTAG. Full image
+`hp21xx-ise:14.7` includes ISE; `hp21xx-ise:14.7-runtime` only has dependencies.
+The original ignored toolchain config selects full image, license MAC
+`08:00:27:68:c9:35`, container license `/opt/Xilinx/Xilinx.lic`. Inspect the
+restored image/config before adapting. Without config, the script defaults
+to runtime image and will lack vendor tools. Both Docker images are backed up:
+
+- [Image archive](https://drive.google.com/file/d/1t3V-1o7V5462pPJNT_7Uo5Q348tAdit7/view?usp=sharing)
+- [SHA256SUMS](https://drive.google.com/file/d/1UmIwX76gUjN4XRSI2xp8G-tPuodl-lwF/view?usp=sharing)
+
+Remote downloads/restoration were not independently tested. Verify checksums,
+extract ZIP wrapper if applicable, then `docker image load -i <archive>`.
+See `toolchain/README.md` for recovery details. Docker Mac PATH if needed:
+`/Applications/Docker.app/Contents/Resources/bin`.
+
+## Suggested continuation sequence
+
+1. Read this file, `diagnostics/hp13210/README.md`, the backend README and
+   `requirements/OUTSTANDING_QUESTIONS.md`. Inspect Git status and actual tools.
+2. Set up laptop dependencies and clone/initialize the reference submodule if
+   missing. Keep original ignored evidence/backups separate from fresh builds.
+3. Run offline checks/builds:
+
+   ```sh
+   make stm32-doctor
+   make stm32-disk-deps
+   make stm32-disk-test
+   make stm32-disk-build
+   ```
+
+4. After user confirms connected/powered setup and HP diagnostic stopped,
+   identify ST-Link, Xilinx cable and **both** serial ports. On the previous
+   Linux terminal HP was `/dev/ttyUSB0`, STM32 `/dev/ttyACM0`; discover rather
+   than assuming these names. Log each separately. Do not send arbitrary
+   characters to the HP console as an STM32 probe. Native CDC ignores baud
+   for USB transport; recover HP serial settings from the user's working setup.
+5. Program corrected backend using **`make stm32-disk-program`**. This validates
+   build fingerprints, backs up/verifies512 KiB flash, then programs/verifies
+   and resets. Do not use `make stm32-program` (old scratch test).
+6. FPGA flash already matched current HDL; no planned FPGA rewrite. If comparison
+   is needed, `python3 scripts/verify_controller_flash.py` temporarily loads
+   the SPI bridge and finally reloads existing flash. **Halt/stop STM32 first**
+   because the temporary bridge removes the FSMC endpoint. It requires local
+   validated controller/bridge builds and native xc3sprog. Do not casually run
+   `make flash-program`, which refers to the blink image.
+7. For DLC9G cold USB ID `03fd:000d`, initialize with
+   `make cable-firmware CABLE_FIRMWARE=build/firmware/xusb_emb.hex`; it should
+   re-enumerate as `03fd:0008`. `make jtag-detect` checks chain. Firmware is RAM
+   resident and may need loading after disconnect. macOS `make usb-scan` is
+   platform-specific; Linux needs its own enumeration/permissions.
+8. With corrected firmware and disposable images, reset boards, get STM32 `?`
+   output, then another after a few idle seconds. Record raw registers/counter
+   changes. Re-run DSN151302 with data14/command15 octal and execution switches0.
+   Capture first failure and nearby STM32 trace. If E04 persists, use raw command
+   nibble/drive/RAR and IRQ state to distinguish register/timing problems from
+   supported commands. Do not claim corrected unsupported handling solved the
+   underlying transport problem without this evidence.
+9. Once capture/seek works, validate real sector reads/writes against disposable
+   host image bytes; then broader diagnostics/RTE II. Keep DMA-overrun timing
+   and write protection out of this first repair unless new evidence requires it.
+
+Other useful offline targets: `make test` (HDL and Python checks),
+`make flag-diagnostics` (small standalone14/15 HP flag programs),
+`make controller-build` (full ISE bitstream, no programming). Latest previous
+full HDL regression passed14 controller variants plus board/activity cases;
+recent changes are STM32-only and its sanitizer tests/build pass.
+
+Suggested first message to the laptop agent:
+
+> Read HANDOVER.md and continue HP13210 bring-up from that state. Check the
+> checkout and toolchain first. The prepared STM32 unsupported-command fix has
+> not been downloaded; the installed version produced E04 and HP E21/E64.
+> Confirm my current connections before accessing hardware, then capture both
+> serial logs and install/test the prepared firmware.
