@@ -2,9 +2,18 @@
 
 ## Q-07: STM32 FAT disk backend
 
-Status: implemented for offline build/host testing on 2026-10-24; no hardware
-connected or programmed. The existing USB/FSMC test remains the next hardware
-step, as requested by the user.
+Status: disk backend programmed and verified through ST-Link on 2026-10-25,
+after the user's successful USB/FSMC test. After preparing the card, the user's
+USB screenshot confirms FAT mounted and drives 0–3 READY. It also shows
+`commands=136 errors=136 trace_dropped=0` with the HP connected but idle.
+The subsequent diagnostic reaches section 1 step 2 (seek cylinder 0) and reports
+E21, missing/wrong-unit attention. USB now shows `??`, `E04` and `CM` for drives
+3 and 0. Storage initialization passes; command capture and attention behavior
+still require investigation before disk-operation acceptance.
+After leaving custom-test entry, a further run stops earlier at initial status:
+HP E64, status `000003` versus expected zero (data error plus aggregate error).
+The installed unsupported-command handler can set this data-error bit; its
+offline correction remains undownloaded. Details are in the diagnostic guide.
 
 - [x] Add a separate `firmware/stm32-disk` image, keeping the transport test's
   sources, ELF and successful-build receipt unchanged during this task.
@@ -17,11 +26,42 @@ step, as requested by the user.
 - [x] Host-test the actual C++ protocol engine with sanitizers and mock media.
 - [x] Add short USB operation/result codes and E01–E16 errors, plus a bounded
   nonblocking event queue and E99/drop accounting. USB drains only while idle;
-  firmware build and host tests cover runtime traces. Hardware trace output
-  remains unverified. Code meanings are in the backend guide.
-- [ ] Run the old USB/FSMC transport test and verify repeated passes.
-- [ ] Later load the backend, verify SD mounting and configuration, then
-  compare real-machine reads/writes against a disposable image's host bytes.
+  firmware build and host tests cover runtime traces. The user's diagnostic
+  screenshot confirms short trace output. Code meanings are in the backend guide.
+- [x] Run the old USB/FSMC transport test and verify repeated passes. The user's
+  photo on 2026-10-25 shows PASS 1 through PASS 19, each with 294 patterns,
+  588 reads and zero failed passes: 5,586 writes and 11,172 reads in total.
+- [x] Save and verify the previous 512 KiB STM32 flash image, then program,
+  verify and reset into the disk backend, including short USB trace codes.
+  Evidence: `build/stm32-disk/programmed.json`, timestamped programming logs
+  and the backup under `build/stm32-disk/backups/`.
+- [x] Compare FPGA SPI flash against the current validated bitstream on
+  2026-10-25. Verification passed for SHA-256
+  `3f8b76e5db2ea251ce3645cf7540c7ddaf0d7c71052fc543d5a6a788211e0fe6`.
+  No flash rewrite was needed. The temporary SPI bridge was replaced by
+  reloading the existing flash image. Receipt: `build/controller-board/flash-verified.json`.
+- [x] Verify SD mounting and configuration on the STM32: the user's screenshot
+  reports FAT mounted and all four configured images READY.
+- [x] Identify visible runtime errors: STM32 E04 denotes unsupported commands.
+  Correct their handling to match the reference daemon: log and ignore, without
+  creating HP attention/completion. Add retained raw FSMC observations to `?`.
+  The correction is tested offline and has not been downloaded.
+- [ ] Determine why unsupported commands arrive and whether counters increase
+  while the HP is idle; resolve diagnostic E21 on seek. Programmers are currently
+  disconnected. USB trace drains only while idle and can be delayed. The current
+  counters do not prove successful disk commands. See the diagnostic guide for
+  the source-derived attention check and limits of the available evidence.
+- [ ] Compare real-machine reads/writes against a disposable image's host bytes.
+
+SD preparation update, 2026-10-25: the user's 8 GB `7900EMU` card is mounted
+as MBR/FAT32 on macOS and its latest read-only filesystem check passed. The
+proposed reformat never ran. The four user-supplied `drive0.img`–`drive3.img`
+files have been moved into `/images`, with `/hp13210.cfg` assigning them to
+drives 0–3. Each image is exactly 4,988,928 bytes, and SHA-256 hashes matched
+before/after moving. Receipt: `build/sd-card-inspection/7900EMU-prepared.json`.
+The subsequent USB screenshot confirms the prepared card mounts on the STM32
+and all four images open successfully. This verifies initialization, not the
+contents of sector transfers.
 - [ ] Validate read startup latency, data throughput and write completion on
   hardware, then rerun HP diagnostics and test RTE II boot.
 - [ ] Add write protection and cylinder metadata later. The accurately timed
@@ -149,7 +189,8 @@ Status: partly resolved on 2026-10-17; hardware timing and integration pending.
 ## Q-04: Future STM32 interface wiring and timing
 
 Status: FSMC wire-wrapped on 2026-10-18; both devices programmed and verified
-on 2026-10-23. Physical read/write verification remains pending.
+on 2026-10-23. Physical scratch-register read/write testing passed on
+2026-10-25; full register-map/protocol and timing-margin validation remain.
 
 Update 2026-10-23: the latest validated FPGA image, including the FSMC
 scratchpad, physical HP polarity fixes and 100 ms activity/two-second idle LED,
@@ -191,8 +232,11 @@ FSMC testing remain pending.
   [firmware bring-up](../firmware/stm32/README.md).
 - [x] Program and verify the STM32 USB/FSMC test firmware via ST-Link/SWD.
 - [x] The user confirmed the STM32 PA1 heartbeat blinks on 2026-10-23.
-- [ ] Verify repeated USB-reported FSMC tests and physical timing.
-  Full STM32 disk firmware remains deferred.
+- [x] Verify repeated USB-reported FSMC scratch-register tests. On 2026-10-25
+  the user's photo shows 19 consecutive passing iterations with no failures,
+  at CPU address 0x6000001C / AD address 0x000E, HCLK=168 MHz.
+- [ ] Measure physical timing margins and verify the full controller register
+  map and disk protocol. The scratch test alone does not establish these.
 
 Update 2026-10-23: FPGA programming and cold boot are accepted. Replacing the
 suspected charge-only USB cable resolved ST-Link USB detection: 0483:3748,

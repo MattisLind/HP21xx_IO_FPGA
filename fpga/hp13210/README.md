@@ -40,9 +40,12 @@ implement the disk backend. This FSMC-enabled image was programmed into SPI
 flash on 2026-10-23 after successful SRAM bring-up.
 
 On 2026-10-24 a separate [STM32 FAT disk backend](../../firmware/stm32-disk/README.md)
-was implemented against this register map. It has not been loaded: first run
-the existing USB/FSMC transport test. The backend adds ready images and basic
-read/write command servicing; its hardware behavior is still unverified.
+was implemented against this register map. On 2026-10-25, after the user
+confirmed 19 passing USB/FSMC iterations, it was programmed and verified on the
+STM32. The FPGA SPI flash was compared against the current bitstream and
+matched, so no FPGA rewrite was needed. The backend currently reports
+`SD/FAT mount failed` and keeps drives offline; disk reads/writes remain
+unverified until storage is mounted and configured.
 
 ## ISE adaptations
 

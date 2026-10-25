@@ -263,11 +263,34 @@ static void trace_tests() {
   context.engine.step(4000); context.engine.step(4100);
   assert((take_trace(context.trace)==std::vector<std::string>{"D1","SC","D0","TO","D0","CM"}));
 }
+static void unsupported_command_tests() {
+  Fixture f;
+  take_trace(f.trace);
+  assert(!strcmp(f.engine.last_error(),"none"));
+  // A stale/unsupported command must not create extra attention bits, signal
+  // completion, or clear control/status belonging to a real in-flight seek.
+  f.bus.attention=1;
+  const uint16_t before=f.bus.status[1];
+  f.bus.command(15,1,{0,0,0}); f.engine.step(0);
+  assert(f.bus.attention==1 && f.bus.status[1]==before);
+  assert((take_trace(f.trace)==std::vector<std::string>{"D1","??","D1","E04"}));
+  assert(f.engine.request_csr()==0x80 && f.engine.last_csr()==0x80);
+  assert(f.engine.last_command()==0xf001 && f.engine.last_rar()==0);
+  assert(!strcmp(f.engine.last_error(),"E04"));
+  f.engine.step(1); assert(f.engine.last_csr()==0 && f.engine.request_csr()==0x80);
+  // Preserve valid SEEK dispatch and its drive-zero completion after a bogus
+  // drive-one request: the original bug would have added attention bit 1.
+  f.bus.attention=0;
+  f.bus.command(3,0,{0,0,0}); f.engine.step(2); f.engine.step(4002);
+  assert(f.bus.attention==1);
+  assert(f.engine.last_command()==0x3000 && f.engine.last_rar()==0);
+}
 int main() {
   static_assert(hp::ImageBytes==4988928);
   config_tests(); startup_seek_tests(); read_tests(); write_tests();
   end_cylinder_and_errors(); pending_and_check_tests();
   reset_and_boundary_tests();
   trace_tests();
+  unsupported_command_tests();
   puts("PASS: configuration, geometry, startup/POPIO refresh, concurrent seeks/abort, timer rollover, reads, writes, partial sectors, EOC, media failures, pending commands, check-data, trace ordering, E01-E10 and queue overflow");
 }

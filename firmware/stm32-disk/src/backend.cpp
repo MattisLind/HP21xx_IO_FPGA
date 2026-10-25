@@ -51,6 +51,8 @@ void Backend::dispatch(uint16_t cmd, uint16_t seek, uint32_t now) {
   selected_=cmd&3;
   command_=cmd>>12;
   address_=Address::decode(seek);
+  last_command_=cmd;
+  last_rar_=seek;
   ++commands_;
   log(drive_event(selected_));
   switch (command_) {
@@ -62,6 +64,13 @@ void Backend::dispatch(uint16_t cmd, uint16_t seek, uint32_t now) {
     case 9: log(Event::Initialize); break;
     case 11: log(Event::Address); break;
     default: log(Event::Unknown); break;
+  }
+  if (command_==11) return; // ADDRESS RECORD is handled entirely in FPGA.
+  if (command_!=1 && command_!=2 && command_!=3 && command_!=5 && command_!=6 && command_!=9) {
+    // Match the reference daemon's default case: record the unexpected value,
+    // but do not manufacture HP attention or command completion for it.
+    error(Event::CommandError);
+    return;
   }
   if (!images_.ready(selected_) || failed_[selected_]) {
     error(Event::OfflineError);
@@ -87,13 +96,6 @@ void Backend::dispatch(uint16_t cmd, uint16_t seek, uint32_t now) {
     return;
   }
   if (command_==5) { complete(false); return; } // REFINE SECTOR, as in model.
-  if (command_==11) return; // ADDRESS RECORD is handled entirely in FPGA.
-  if (command_!=1 && command_!=2 && command_!=6 && command_!=9) {
-    error(Event::CommandError);
-    status(selected_, DataError);
-    complete();
-    return;
-  }
   if (!address_.valid()) {
     error(Event::AddressError);
     status(selected_, AddressError);
@@ -131,11 +133,14 @@ void Backend::step(uint32_t now) {
   // Every CSR read acknowledges command IRQ, even while transferring data.
   // Capture both command and RAR immediately so it cannot disappear unnoticed.
   const uint16_t csr=bus_.read(Csr);
+  last_csr_=csr;
   if (csr&0x80) {
+    request_csr_=csr;
     const uint16_t cmd=bus_.read(Command), seek=bus_.read(SeekRecord);
     if (pending_) {
       log(drive_event(cmd&3));
-      ++errors_; log(Event::PendingError); // Hardware has only one pending-command latch too.
+      ++errors_; last_error_=Event::PendingError;
+      log(Event::PendingError); // Hardware has only one pending-command latch too.
       status(cmd&3, Overrun);
     } else {
       pending_command_=cmd;

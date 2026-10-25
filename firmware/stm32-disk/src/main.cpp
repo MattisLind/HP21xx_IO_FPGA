@@ -112,6 +112,9 @@ static void report() {
   append_report("commands=%lu errors=%lu trace_dropped=%lu\r\nSend ? for status. Images are writable; write-protect is deferred.\r\n",
                 static_cast<unsigned long>(backend.commands()),static_cast<unsigned long>(backend.errors()),
                 static_cast<unsigned long>(trace.dropped()));
+  append_report("FSMC csr=0x%04X request=0x%04X command=0x%04X rar=0x%04X last_error=%s\r\n",
+                unsigned(backend.last_csr()),unsigned(backend.request_csr()),
+                unsigned(backend.last_command()),unsigned(backend.last_rar()),backend.last_error());
 }
 
 void setup() {

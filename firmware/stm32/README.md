@@ -99,6 +99,14 @@ including without a USB terminal or DTR. No FSMC accesses occur until `t` is
 received. Starting the test changes the LED to the latest pass/fail indication;
 `s` stops the test and restores the heartbeat.
 
+The original firmware accepted every `t` as a request for an immediate pass,
+even while already running. Holding the key therefore bypassed the one-second
+interval. Corrected on 2026-10-25: `t` starts only from stopped and is ignored
+while running; `s` remains the stop command. Commands are processed between
+complete test passes, so `s` takes effect after the current pass finishes.
+The corrected image is built separately from the firmware already on the
+board; this change does not program the device.
+
 1. Build the matching FPGA image with `make controller-build`; program it
    separately with `make controller-program` when the FPGA JTAG is connected.
    The latest FPGA image was programmed into SPI flash and verified on

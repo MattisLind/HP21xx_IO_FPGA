@@ -56,6 +56,11 @@ class Backend {
   }
   uint32_t commands() const { return commands_; }
   uint32_t errors() const { return errors_; }
+  uint16_t last_csr() const { return last_csr_; }
+  uint16_t request_csr() const { return request_csr_; }
+  uint16_t last_command() const { return last_command_; }
+  uint16_t last_rar() const { return last_rar_; }
+  const char *last_error() const { return errors_ ? event_code(last_error_) : "none"; }
   // Initial bring-up thresholds in real microseconds, not simulator nanoseconds.
   static constexpr uint32_t WordTimeoutUs=100, SeekTimeUs=4000;
  private:
@@ -66,6 +71,8 @@ class Backend {
   Trace *trace_;
   alignas(4) uint8_t buffer_[BufferBytes] = {};
   uint16_t pending_command_=0, pending_seek_=0;
+  uint16_t last_csr_=0, request_csr_=0, last_command_=0, last_rar_=0;
+  Event last_error_=Event::Boot;
   bool pending_=false, read_wait_=false;
   bool failed_[Drives] = {};
   unsigned selected_=0, command_=0, position_=0, length_=0, check_words_=0;
@@ -76,7 +83,7 @@ class Backend {
   void finish_write();
   void log(Event event) { if (trace_) trace_->push(event); }
   void mark(Event event) { log(drive_event(selected_)); log(event); }
-  void error(Event event) { ++errors_; mark(event); }
+  void error(Event event) { ++errors_; last_error_=event; mark(event); }
   void media_error(Event event);
   void dispatch(uint16_t command, uint16_t seek, uint32_t now);
 };

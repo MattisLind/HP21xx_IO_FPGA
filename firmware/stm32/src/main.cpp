@@ -114,10 +114,12 @@ void loop() {
   connected = now_connected;
   while (Serial.available()) {
     const int command = Serial.read();
-    if (command == 't') {
-      if (!enabled) fsmc_init();
+    if (command == 't' && !enabled) {
+      fsmc_init();
       enabled = true;
-      last_test = now - 1000U;  // Run the first requested test immediately.
+      // Only starting from stopped schedules an immediate pass. Repeated t
+      // characters (including keyboard auto-repeat) must not reset the timer.
+      last_test = now - 1000U;
     } else if (command == 's') enabled = false;
   }
   if (!enabled) {

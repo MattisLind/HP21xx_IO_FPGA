@@ -1,6 +1,83 @@
 # HP 13210 flag bring-up
 
-## Current HP 2100S result: E50 after correcting the select code
+## Latest retest: E64 at initial status
+
+After leaving configuration/custom-test entry (clear switch-register bits 2
+and 3, then enter `EN` at H55), the user reported:
+
+```text
+H35 INITIAL STATUS IN STEP 01
+E64 STATUS IS 000003 SHOULD BE 000000
+H51 CYL 0000 HEAD 00 SECTOR 00 WORD COUNT 0000 UNIT 00
+```
+
+The HP status word is octal. In the implemented FPGA status-word layout,
+bit 1 is data error and bit 0 is the aggregate error indicator. Thus `000003`
+means **data error plus aggregate error**, not drive busy (HP bit 2).
+The STM32 SET/CLEAR STATUS register uses a different packing: its data-error
+mask is bit 0. Do not decode the HP word using the STM32 register masks.
+
+The concurrent USB trace still shows unsupported commands (`??`, `E04`)
+followed by `CM`. The installed firmware's unsupported-command path sets
+data-error before completion, so it can account for this status. This is a
+plausible software-generated error rather than evidence of an SD read failure;
+the underlying cause of the unsupported command values remains unknown.
+No new firmware has been downloaded. The prepared correction ignores such
+commands without changing status or attention. This run stopped earlier than
+the previous E21 seek failure and does not demonstrate a passing seek.
+
+## Previous HP 2100S result: E21 during seek, with the STM32 disk backend
+
+On 2026-10-25, after FAT mounting and all four images reported READY, the user
+ran DSN 151302 with data select code 14 and command select code 15 (octal):
+
+```text
+H44 SEEK IN STEP 02
+E21 MISSING OR DUPLICATE ATTENTION BIT
+H51 CYL 0000 HEAD 00 SECTOR 00 WORD COUNT 0000 UNIT 00
+```
+
+The simultaneous STM32 trace showed `D3 ?? D3 E04 D3 CM`, then
+`D0 ?? D0 E04 D0 CM`. Its earlier status report had
+`commands=136 errors=136 trace_dropped=0`; those counters are historical,
+not a count of this seek alone. `E04` here is a **STM32 unsupported-command
+error**, separate from the HP diagnostic error numbers. FAT and image opening
+have succeeded; successful disk transfers have not been established.
+
+In `12960-18004_Rev-1805.src`, section 1 step 1 reads and checks initial drive
+status; step 2 calls `FSEEK` to seek cylinder 0. Assuming no earlier errors were
+continued through, initial status and the preceding setup checks passed. This
+section has not yet reached its sector read/write tests.
+
+`FSEEK` in `12960-18001_Rev-1805.src` calls `SEEK`, then `WAITS`, then checks
+the captured command-channel attention word against the selected unit.
+`GETN` in part 06 finds the rightmost set bit among the low four bits. Thus this
+particular E21 path means no low-four attention bit was found, or the first
+one found identified the wrong unit. Despite the general message's wording,
+this path does not reject every possible multi-bit attention pattern. The raw
+attention word was not captured, so missing versus wrong-unit attention is
+not yet known. `WAITS` also reads status after capturing attention; reaching
+E21 does not prove a correct seek completion or its subsequent status check.
+
+Offline review found a difference from the reference STM32 testbench daemon:
+the initial C++ backend responded to unsupported commands with data-error
+status and attention/completion. The reference ignores them. That response
+could introduce unwanted attention, so it has been removed and regression
+tested. It does **not** explain why unsupported command values were received,
+and is not yet a verified fix for this HP failure. The updated USB `?` report
+retains raw CSR, command and RAR observations to help investigate that next.
+
+Further candidates include FSMC reads when switching register addresses and
+the relationship between the FPGA's RAR handshake flag, live command register
+and the STM32's later seek attention. The reference HDL also contains the RAR
+flag behavior, so it has not been changed on this evidence. The passing
+single-register scratch test does not establish correct address switching or
+full disk-command timing.
+
+The programmers are disconnected. These corrections and diagnostic additions
+are offline only; the hardware still runs the previously programmed firmware.
+
+## Earlier E50 after correcting the select code
 
 On 2026-10-24 the user corrected the diagnostic's **data select code to 14**,
 so the command channel is **15** (both octal). The earlier 15/16 diagnostic

@@ -39,6 +39,7 @@ help:
 	@echo 'make stm32-disk-deps  - fetch pinned STM32SD/FatFs libraries for the disk backend'
 	@echo 'make stm32-disk-build - compile the separate SDIO/FAT disk backend; no download'
 	@echo 'make stm32-disk-test  - run native disk-backend tests with sanitizers'
+	@echo 'make stm32-disk-program - back up STM32 flash, then program/verify the disk backend'
 
 doctor runtime-image runtime-check toolchain-check sim smoke usb-scan firmware-extract ise-image:
 	$(PYTHON) scripts/fpga.py $@
@@ -110,7 +111,7 @@ stm32-build:
 stm32-program:
 	$(PYTHON) scripts/stm32.py program
 
-.PHONY: stm32-disk-deps stm32-disk-build stm32-disk-test
+.PHONY: stm32-disk-deps stm32-disk-build stm32-disk-test stm32-disk-program
 stm32-disk-deps:
 	$(PYTHON) scripts/stm32_disk.py deps
 
@@ -119,3 +120,6 @@ stm32-disk-build:
 
 stm32-disk-test:
 	$(PYTHON) scripts/stm32_disk.py test
+
+stm32-disk-program:
+	$(PYTHON) scripts/stm32_disk.py program

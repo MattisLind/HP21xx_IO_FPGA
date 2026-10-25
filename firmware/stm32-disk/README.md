@@ -2,9 +2,11 @@
 
 This is a separate firmware image for the STM32F407VET6 carrier. It ports the
 backend in `hp2116_verilog/tb_hp2116.sv` to polling firmware with FAT-backed
-disk images. It has been compiled and tested on the host, **not programmed or
-tested on hardware**. The existing [USB/FSMC transport test](../stm32/README.md)
-and its build output remain available unchanged. Run that test first.
+disk images. It has been compiled and tested on the host; **hardware disk
+operation remains unverified**. Programming outcomes and remaining hardware
+checks are recorded in [outstanding questions](../../requirements/OUTSTANDING_QUESTIONS.md).
+The existing [USB/FSMC transport test](../stm32/README.md) remains available;
+the user confirmed 19 consecutive passing iterations on 2026-10-25.
 
 The HP diagnostic with data select code **14**, command **15** (octal) reached
 E50 because no drive was ready. This backend marks successfully opened images
@@ -78,7 +80,16 @@ installed dependencies as the transport test. The new helper uses its own
 `build/stm32-disk/` directory. It does not overwrite `build/stm32/firmware/` or
 the transport test's build/program receipts. `make stm32-build` and
 `make stm32-program` still refer to the old transport test, not this backend.
-No backend programming target is introduced at this stage.
+To install this separate image after transport bring-up, explicitly run:
+
+```sh
+make stm32-disk-program
+```
+
+This checks the successful-build fingerprints, saves and verifies a fresh
+512 KiB STM32 flash backup under `build/stm32-disk/backups/`, then programs,
+verifies and resets the processor through ST-Link. The receipt is
+`build/stm32-disk/programmed.json`. Build/test commands do not program devices.
 
 The SDIO/FAT libraries are
 [STM32SD 1.5.0](https://github.com/stm32duino/STM32SD/tree/9b9bf7053c1d5b61758bd2fa415669233a7f1229)
@@ -123,6 +134,10 @@ the remainder of the partial sector was zero-filled, and completion was
 signalled. `TO` is not itself a fault: short DMA transfers normally end this
 way. `CM` means the backend took its completion path, including on an error;
 check for preceding `E` codes rather than interpreting it as proof of success.
+Unsupported commands are logged as `??`/`E04` and ignored without status,
+attention or completion writes, matching the reference testbench. The initially
+programmed firmware incorrectly completed these requests; the correction is
+prepared offline and has not yet been downloaded.
 
 | Code | Meaning |
 | --- | --- |
@@ -153,7 +168,7 @@ status message.
 | `E01` | Command addressed an offline or quarantined drive |
 | `E02` | Seek requested while that drive was already seeking |
 | `E03` | Invalid seek cylinder/head/sector |
-| `E04` | Unsupported command |
+| `E04` | Unsupported command; ignored without HP completion or attention |
 | `E05` | Invalid transfer cylinder/head/sector |
 | `E06` | Requested cylinder differs from the drive's current cylinder; write/init exits, reference-style read/check may continue |
 | `E07` | Image read failed; drive quarantined |
@@ -178,6 +193,14 @@ fill: new records are dropped, retained records stay in order, and a single
 `E99` is emitted after the queue drains. The `?` status report includes the
 cumulative `trace_dropped` count. Trace buffering is diagnostic assistance,
 not a lossless log or a measurement of physical bus timing.
+
+The updated `?` report also prints hexadecimal FSMC register diagnostics:
+`csr` is the most recent CSR poll; `request` is the most recent CSR with command
+IRQ set; `command` and `rar` are the raw words for the last dispatched request.
+`last_error` retains the latest runtime error code, or `none`. These are retained
+observations, not an atomic bus capture: later activity may replace the command
+words after an error. Status reports do not perform extra FSMC reads, since a
+CSR read acknowledges command IRQ. Capture the report promptly after a failure.
 
 ## Testbench correspondence
 

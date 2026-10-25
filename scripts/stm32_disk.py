@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fetch pinned disk libraries and build/test firmware offline; never program hardware."""
+"""Fetch, build and test disk firmware; program hardware only on explicit request."""
 import argparse
 import hashlib
 import json
@@ -11,6 +11,7 @@ import sys
 import urllib.request
 import zipfile
 import io
+import datetime
 
 import stm32
 
@@ -108,12 +109,51 @@ def test():
     run([executable])
 
 
+def program():
+    receipt = OUT/'success.json'
+    meta = json.loads(receipt.read_text())
+    image = OUT/'firmware/disk_backend.elf'
+    if meta['sources'] != hashes() or meta['elf_sha256'] != digest(image):
+        raise RuntimeError('Backend changed since build; run make stm32-disk-build')
+    stamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
+    folder = OUT/'backups'
+    folder.mkdir(exist_ok=True)
+    backup = folder/('before-disk-backend-'+stamp+'.bin')
+    probe = [str(stm32.dependencies()['openocd']), '-f', 'interface/stlink.cfg', '-f', 'target/stm32f4x.cfg']
+
+    def logged(command, name):
+        log = OUT/name
+        print('+', ' '.join(command), flush=True)
+        with log.open('w') as output:
+            result = subprocess.run(command, cwd=ROOT, stdout=output, stderr=subprocess.STDOUT)
+        print(log.read_text(), flush=True)
+        result.check_returncode()
+        return str(log.relative_to(ROOT))
+
+    # Save and verify the currently installed 512 KiB image before replacement.
+    backup_log = logged(probe+['-c', 'adapter speed 1000; init; reset halt; flash probe 0; flash banks; '
+                        'dump_image "'+str(backup)+'" 0x08000000 0x80000; '
+                        'verify_image "'+str(backup)+'" 0x08000000 bin; shutdown'], 'backup-'+stamp+'.log')
+    if backup.stat().st_size != 512*1024:
+        raise RuntimeError('STM32 backup must be exactly 512 KiB')
+    if meta['sources'] != hashes() or meta['elf_sha256'] != digest(image):
+        raise RuntimeError('Backend changed during backup; rebuild before programming')
+    log = logged(probe+['-c', 'adapter speed 1000; program "'+str(image)+'" verify reset exit'], 'program-'+stamp+'.log')
+    (OUT/'programmed.json').write_text(json.dumps({
+        'programmed_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        'elf_sha256': meta['elf_sha256'], 'sources': meta['sources'],
+        'verified': True, 'reset_requested': True, 'hardware_disk_tested': False,
+        'backup': {'path': str(backup.relative_to(ROOT)), 'sha256': digest(backup),
+                   'size': backup.stat().st_size, 'verified': True, 'log': backup_log},
+        'log': log}, indent=2)+'\n')
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['deps', 'build', 'test'])
+    parser.add_argument('action', choices=['deps', 'build', 'test', 'program'])
     action = parser.parse_args().action
     try:
-        {'deps':fetch, 'build':build, 'test':test}[action]()
+        {'deps':fetch, 'build':build, 'test':test, 'program':program}[action]()
     except (OSError, ValueError, RuntimeError, subprocess.CalledProcessError) as error:
         print('ERROR:', error, file=sys.stderr)
         sys.exit(1)
