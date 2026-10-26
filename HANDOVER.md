@@ -6,6 +6,60 @@ bring-up state; some older README status paragraphs describe earlier stages.
 
 ## Laptop update — 2026-10-26
 
+## Overnight stop: diagnostic no longer starts after CHECK firmware update
+
+User stopped for the night and reports: "The diag is not starting at all now."
+Do NOT treat CHECK fix as accepted on hardware. Native tests and flash verify
+passed, but the next physical diagnostic attempt did not start. Cause unknown;
+investigate startup/reset state before another firmware change.
+
+Latest USB status after CHECK update showed all4 READY, commands0/errors0,
+CSR0040 (pending old data strobe). No new HP text was captured after the
+earlier step30 E64 message; no new disk commands were captured after flashing.
+Both serial devices disconnected around22:14 Stockholm time; hardware power
+state was not independently checked. Serial capture is now STOPPED for the
+overnight pause. Logs preserved in build/serial-logs/20261026T205931Z/ and
+summary build/check-data-investigation/overnight-state.json.
+
+Next session: check USB/dongles and HP halt/panel state, reload the FPGA
+SRAM image if power was cycled (SPI boot flash is still old), then restart
+logging and inspect startup/POPIO, pending data request and diagnostic entry.
+STM32 flash retains CHECK-fixed ELF3f9c7321d0070602162dd5b531d52ce05062e63b9a72e667e17ea1946dd7d9df.
+FPGA SRAM image to reload is build/controller-board/controller.bit,
+SHA256f9d066de0874ff1842ba0dfd1eca3f617e6afea89eca957511456a794edf4448.
+Older "monitors active" paragraphs below describe earlier points this evening.
+
+## Current firmware: autonomous CHECK fix installed and verified
+
+User requested the CHECK correction after step30 E64. CHECK now accepts its
+single six-bit sector-count word and completes without dummy HP words or
+per-word STCs. A request exactly covering the remaining two-head cylinder
+succeeds; exceeding it sets EndCylinder before the zero-attention command
+completion write. Zero remains a no-op and missing count still times out E10.
+READ/WRITE retain their existing word handshakes. No CRC/media-fault model
+was added. FPGA source/image and 500 us seek delay are unchanged.
+
+New regression fails on the old backend at the 49-sector EOC assertion and
+passes after the change. Full native ASan/UBSan tests PASS. Added106 CHECK
+cases cover actual step30 counts, every drive/head at sectors0/7/23 on both
+sides of EOC, zero and masked count bits, without artificial HP data strobes.
+ARM build PASS: flash47428 bytes, RAM22700 bytes. Programmed/verified/reset
+new ELF SHA2563f9c7321d0070602162dd5b531d52ce05062e63b9a72e667e17ea1946dd7d9df.
+Verified512KiB backup build/stm32-disk/backups/before-disk-backend-20261026T211030207970Z.bin.
+The first backup attempt failed after12KiB before programming; that partial
+file is not a valid backup. A fresh full backup/verify and programming retry
+succeeded. Receipt build/stm32-disk/programmed.json matches new build sources.
+
+User restored the STM32 serial ACL after reset. Both monitors active in
+build/serial-logs/20261026T205931Z/. Two NEW USB reports after programming:
+FAT mounted, drives0-3 READY, zero commands/errors/trace_dropped, seek500us.
+CSR0040 retains an old HP data strobe; HP remains halted. User was asked to
+restart the diagnostic from its normal beginning after the firmware reset.
+Physical step30 acceptance is pending; do not claim it passes on HP yet.
+Evidence/source/test/log hashes: build/check-data-investigation/acceptance.json.
+Aggregate current-image receipt build/hardware-update-20261026.json updated;
+previous receipt preserved as hardware-update-before-check-fix-20261026.json.
+
 ## Latest physical diagnostic: reaches step 30, CHECK DATA missing EOC
 
 After both downloads below, user ran DSN151302 and corrected reported A to
@@ -29,10 +83,10 @@ depending on HP data strobes, not another seek-completion race.
 
 Evidence/snapshot and native repro under build/check-data-investigation/;
 original live serial logs remain build/serial-logs/20261026T205931Z/.
-No CHECK fix written or downloaded yet; running images are still those below.
-HP remains halted; both serial captures active. Next correction should make
-CHECK autonomous after accepting the count, preserving no-EOC at exactly48
-and asserting EOC on49, and test those boundaries without artificial STCs.
+This failure was recorded BEFORE the autonomous CHECK fix installed above.
+The former backend emitted a dummy word and timed out; the corrected native
+repro emits no dummy word, no timeout, and sets EOC only for49 in this series.
+HP remains halted; both serial captures active; physical retry is pending.
 
 ## Current hardware: both updated after power-up (2026-10-26)
 
