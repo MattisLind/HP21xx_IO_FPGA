@@ -6,6 +6,50 @@ bring-up state; some older README status paragraphs describe earlier stages.
 
 ## Laptop update — 2026-10-26
 
+## SEEK correction in production RTL (not downloaded)
+
+User authorized changing Verilog and validating seek behavior. The current
+source differs from the SRAM image still running on the board. SEEK now
+requests backend service at RAR acceptance but only raises HP flag on backend
+attention. ADDRESS RECORD remains immediate. Extended tests exposed and fixed
+STATUS aborting SEEK (step21 E10), wrong-drive abort selection, Busy appearing
+too late, and acknowledgements lost under overlapping/wide STC,C strobes.
+An eight-packet command/RAR FIFO now prevents a later STATUS or closely spaced
+SEEK from replacing a pending backend request. CSR consumes one packet;
+COMMAND/RAR expose its snapshot until RAR is read; abort bits remain live.
+The existing STM32 backend already uses this read order. Extended native tests
+also exposed a busy-seek recovery issue: backend.cpp now retains Busy and defers
+attention until the original positioning worker finishes, instead of signalling
+an early busy-error completion. Invalid addresses also clear internal Seeking.
+This firmware correction is built/tested but NOT programmed; the running image
+is unchanged. New ARM ELF SHA25618fa6512894eeace422c3c4ee81f37e82290298e1da64c873869f725a6fd0e54.
+
+All22 updated 50MHz controller variants, board/LED sims,22 Python tests and
+native ASan/UBSan backend tests pass. Native seek geometry coverage adds64
+valid/all-head/all-drive boundary cases and16 invalid cylinder/sector cases.
+ISE smoke receipt matches current RTL, minimumperiod5.751ns; no bitstream
+downloaded. Final six seek/recovery cases ALL PASS under
+build/hp2116-seek-validation/recovery/; acceptance.json records source hashes,
+checkpoint/log hashes, timing settings, and receipts. Cases:500us/4000us seek,
+20us/2ms backend capture latency, combined4ms seek+2ms capture, and8x wider CPU
+strobes. Each runs actual S1 steps1,2,21,22,23 plus successful recovery SEEK in
+step24 and stops BEFORE first WRITE executes. Native tests confirm busy-seek
+error waits for original completion and a subsequent valid seek succeeds.
+Earlier acceptance/ runs passed through entry to step24 before the final backend
+recovery correction; release/validated contain exploratory failures.
+See diagnostics/hp13210/seek-validation.md for protocol and testing details.
+
+Full CPU simulator now saves configured.hex at initial HLT74 and section1.hex
+at original S1 entry003137, after startup initializes globals (NFFB etc).
+FAST_MEM replays memory with reset peripherals; SECTION1_ONLY must use
+section1.hex, not configured.hex. STOP_AFTER_SEEK_STEPS requires reaching
+step24 after steps1,2,21,22,23; final STOP_BEFORE_FIRST_WRITE also verifies the
+recovery SEEK in step24. Capture latency is injected per new IRQ burst;
+backlogs are drained. Simulated Busy publication is synchronous before fork,
+matching actual Backend::dispatch and avoiding a reference-worker ordering race.
+Reference submodule untouched. The corrected hardware image from earlier is
+still SRAM-only and the running STM32 seek delay is still500us.
+
 Full HP2116 CPU simulation now reproduces the hardware E21 using the actual
 DSN151302 binary plus the corrected board controller core. See
 diagnostics/hp13210/seek-timing.md and scripts/hp2116_seek_timing.py.

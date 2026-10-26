@@ -1,5 +1,10 @@
 # HP2116 diagnostic SEEK timing experiment
 
+This document preserves the original failure experiments. The resulting
+production change and extended tests are described in
+[seek-validation.md](seek-validation.md). New simulation copies use production
+RTL directly; the old `COMPLETION_FLAG_ONLY` experimental override is retired.
+
 The full HP2116 CPU simulation, running the original DSN151302 absolute
 binary through its configurator, reproduces the real HP's section 1 step 2
 E21. The controller in these experiments is the corrected board core from
@@ -132,10 +137,11 @@ initial HLT 74 (P=012307), after configuration, so configurator UART input
 still runs with the original timing. Panel-button pulses span a CPU sampling
 edge at every supported divider.
 
-`+COMPLETION_FLAG_ONLY=1` is a simulation-only experiment: SEEK address
+`+COMPLETION_FLAG_ONLY=1` was a simulation-only experiment: SEEK address
 acceptance requests backend service but does not raise the HP command flag.
 The worker's attention write raises that flag on completion. ADDRESS RECORD
-retains its immediate flag. The real board RTL is not edited by this option.
+retains its immediate flag. That experiment did not edit the board RTL; the
+current production RTL now implements the corrected completion timing.
 
 `+STOP_AFTER_CYL1` stops when the diagnostic reaches its cylinder-1 seek in
 step 21. Reaching that point establishes progress beyond step 2, not a full

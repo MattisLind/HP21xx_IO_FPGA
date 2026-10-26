@@ -134,6 +134,29 @@ static void seek_geometry_tests() {
   }
   assert(f.images.reads==0 && f.images.writes==0);
 }
+
+static void seek_busy_recovery_tests() {
+  Fixture f;
+  f.bus.command(3,0,{1,0,0}); f.engine.step(0);
+  f.bus.command(3,0,{8,0,0}); f.engine.step(10);
+  assert(f.bus.status[0]&hp::SeekCheck);
+  assert(f.bus.status[0]&hp::Busy);
+  assert(f.bus.attention==0);
+  f.engine.step(hp::Backend::SeekTimeUs-1); assert(f.bus.attention==0);
+  // STATUS can replace the live command while positioning continues.
+  f.bus.cmd=0;
+  f.engine.step(hp::Backend::SeekTimeUs);
+  assert(f.bus.attention==1 && !(f.bus.status[0]&(hp::Busy|hp::Seeking)));
+  assert(f.bus.status[0]&hp::SeekCheck);
+  // The next valid seek must recover without another false SEEK BUSY error.
+  f.bus.attention=0;
+  f.bus.command(3,0,{7,3,23}); f.engine.step(hp::Backend::SeekTimeUs+10);
+  assert(!(f.bus.status[0]&hp::SeekCheck));
+  assert(f.bus.status[0]&hp::Busy);
+  f.engine.step(2*hp::Backend::SeekTimeUs+10);
+  assert(f.bus.attention==1 && f.engine.errors()==1);
+  assert(f.images.reads==0 && f.images.writes==0);
+}
 static void read_tests() {
   Fixture f;
   f.images.bytes[0][0]=0x34; f.images.bytes[0][1]=0x12;
@@ -335,7 +358,7 @@ static void unsupported_command_tests() {
 }
 int main() {
   static_assert(hp::ImageBytes==4988928);
-  config_tests(); startup_seek_tests(); seek_geometry_tests(); read_tests(); write_tests();
+  config_tests(); startup_seek_tests(); seek_geometry_tests(); seek_busy_recovery_tests(); read_tests(); write_tests();
   end_cylinder_and_errors(); pending_and_check_tests();
   reset_and_boundary_tests();
   trace_tests();

@@ -82,10 +82,16 @@ void Backend::dispatch(uint16_t cmd, uint16_t seek, uint32_t now) {
   }
   if (command_==3) { // SEEK RECORD: independent timed worker per drive.
     Drive &d=drive_[selected_];
-    if (d.seeking || !address_.valid()) {
-      error(d.seeking ? Event::SeekBusyError : Event::SeekAddressError);
+    if (d.seeking) {
+      // The earlier positioning operation continues (13210A manual 3-23).
+      // Retain Busy and let that worker signal attention when it finishes;
+      // an early completion would let HP issue another seek while still busy.
+      error(Event::SeekBusyError);
       status(selected_, SeekCheck);
-      status(selected_, Busy, false);
+    } else if (!address_.valid()) {
+      error(Event::SeekAddressError);
+      status(selected_, SeekCheck);
+      status(selected_, Busy|Seeking, false);
       bus_.write(Attention, uint16_t(1U<<selected_));
       mark(Event::Complete);
     } else {

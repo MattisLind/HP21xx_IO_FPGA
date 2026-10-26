@@ -9,10 +9,12 @@ The current production controller core is used without experimental overrides.
 +STOP_AFTER_CYL1 ends after step 2 succeeds
 and step 21 advances to its cylinder-1 seek; this is not a full-diagnostic pass.
 +STOP_AFTER_SEEK_STEPS stops on entry to section 1 step 24, after steps 21-23.
++STOP_BEFORE_FIRST_WRITE also checks the recovery seek in step 24 and stops
+before dispatching its first WRITE, without exercising sector I/O.
 The initial HLT 74 saves configured.hex. +FAST_MEM=<path> replays that memory
 at the same diagnostic entry with reset peripherals, for fast repeated tests.
-+SECTION1_ONLY with FAST_MEM enters the original section-1 routine directly;
-this isolates seek tests from the diagnostic's long console/startup delays.
++SECTION1_ONLY with FAST_MEM=section1.hex enters the original section-1 routine
+with its initialized globals; section1.hex is saved by a preceding normal run.
 """
 from pathlib import Path
 import argparse
@@ -75,6 +77,7 @@ bit timing_capture_burst = 0;
 string timing_boot_memory;
 reg [15:0] timing_last_step = 16'hffff;
 reg timing_configured = 0;
+reg timing_section1_saved = 0;
 initial begin
   void'($value$plusargs("FAST_MEM=%s", timing_boot_memory));
   void'($value$plusargs("SEEK_US=%d", timing_seek_us));
@@ -86,6 +89,11 @@ initial begin
   $finish;
 end
 always @(negedge clk) begin
+  if (timing_configured && cpu.run_ff && cpu.P == 15'o003137 && !timing_section1_saved) begin
+    $writememh("section1.hex", mem);
+    timing_section1_saved = 1;
+    $display("CHECKPOINT: section1.hex with initialized diagnostic globals");
+  end
   if (timing_configured && cpu.run_ff && mem_we && mem_addr == (mem[15'o000131] & 15'o001777) &&
       mem_wdata != timing_last_step) begin
     timing_last_step = mem_wdata;
@@ -130,6 +138,11 @@ always @(posedge cpu.disk7900.command_channel_flag_ff)
                 stm32_fsmc_write16(STM32_REG_7900_SET_STATUS, { selected_drive[1:0], STATUS_DRIVE_BUSY});
 
                 fork""")
+    tb = replace(tb, """              drive_busy[selected_drive] = 1'b0; // apparently it shall return not busy in this case.\x20
+              stm32_fsmc_write16(STM32_REG_7900_CLEAR_STATUS, { selected_drive[1:0], STATUS_DRIVE_BUSY});
+              stm32_fsmc_write16(STM32_REG_7900_ATTENTION,{12'h000, decode2to4(selected_drive)});""", """              // The original positioning worker retains Busy and raises
+              // attention on completion, matching Backend::dispatch.
+""")
     tb = replace(tb, "seek_active[selected_drive] = 1'b1;", "seek_active[seek_drive] = 1'b1;")
     tb = replace(tb, "seek_done[selected_drive] = 1'b0;", "seek_done[seek_drive] = 1'b0;")
     tb = replace(tb, "        wait (!stm32_irq);", """        // CSR consumes one request. Further queued packets keep IRQ high;
@@ -175,7 +188,11 @@ always @(posedge cpu.disk7900.command_channel_flag_ff)
 
   // Synchronous memory model""")
     tb = replace(tb, "        command = indata[15:12];", """        $display("CAPTURE ns=%0d command=%04h", $time, indata);
-        command = indata[15:12];""")
+        command = indata[15:12];
+        if ($test$plusargs("STOP_BEFORE_FIRST_WRITE") && command == 1 && timing_last_step == 24) begin
+          $display("PASS: DSN151302 seek steps and recovery seek in step 24; first WRITE not executed");
+          $finish;
+        end""")
     tb = replace(tb, "        // seek is done", """        $display("SEEK_DEADLINE ns=%0d drive=%0d", $time, seek_drive);
         // seek is done""")
     tb = replace(tb, "        if (~seek_aborted[seek_drive]) begin", """        $display("SEEK_END ns=%0d command=%04h aborted=%b", $time, indata, seek_aborted[seek_drive]);

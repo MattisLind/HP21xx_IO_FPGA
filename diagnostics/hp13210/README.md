@@ -1,5 +1,8 @@
 # HP 13210 flag bring-up
 
+The [SEEK correction and validation](seek-validation.md) describes the current
+production RTL, its request queue, and the diagnostic seek regression coverage.
+
 The [HP2116 SEEK timing experiment](seek-timing.md) reproduces the hardware's
 step 2 E21 in the full CPU simulation and records the command-flag, attention,
 STATUS, and backend-capture ordering.
