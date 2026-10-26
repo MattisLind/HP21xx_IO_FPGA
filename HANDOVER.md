@@ -6,13 +6,104 @@ bring-up state; some older README status paragraphs describe earlier stages.
 
 ## Laptop update — 2026-10-26
 
+## Latest physical diagnostic: reaches step 30, CHECK DATA missing EOC
+
+After both downloads below, user ran DSN151302 and corrected reported A to
+64 (B=4, same error halt code). Captured HP console gives exact failure:
+H22 CYCLIC CHECK IN STEP 30; E64 STATUS IS 000000 SHOULD BE 000041;
+H51 CYL 0000 HEAD 00 SECTOR 00 WORD COUNT 0049 UNIT 00.
+This is later than the former SEEK failure. Trace includes successful seeks,
+write/read/refine commands, and eight CK / TO / CM sequences. E03/E02 occur
+during the diagnostic's deliberate invalid/busy seek checks; no E04 observed.
+
+Root cause reproduced against the actual C++ backend with NO hardware changes:
+CHECK consumes sector count, then enters the READ-style dummy-word/STC loop.
+HP supplies no per-word strobes for cyclic check, so it times out after one
+dummy word and completes without advancing to end-of-cylinder. Native repro
+for counts 1,2,4,8,16,32,48,49 shows timeout=1, dummy_words=1, EOC=0 for ALL.
+Diagnostic source 12960-18004 Rev1805 step30 explicitly expects 48 sectors to
+succeed and 49 to set EOC+any-error (octal 000041). Manual paragraphs3-28/29:
+CHECK performs internal sector checks without HP data transfers until count
+exhausted or EOC/error. Thus missing 000041 is explained by CHECK incorrectly
+depending on HP data strobes, not another seek-completion race.
+
+Evidence/snapshot and native repro under build/check-data-investigation/;
+original live serial logs remain build/serial-logs/20261026T205931Z/.
+No CHECK fix written or downloaded yet; running images are still those below.
+HP remains halted; both serial captures active. Next correction should make
+CHECK autonomous after accepting the count, preserving no-EOC at exactly48
+and asserting EOC on49, and test those boundaries without artificial STCs.
+
+## Current hardware: both updated after power-up (2026-10-26)
+
+User confirmed HP halted and explicitly requested both downloads. Xilinx cable
+initialized from 03fd:000d to 03fd:0008 using xusb_emb.hex; JTAG identifies
+XC6SLX9 0x24001093. ST-Link identifies STM32F407, 512 KiB flash.
+Latest production controller built for the actual carrier, board/LED sims pass,
+ISE timing passes 50 MHz (minimum period 7.077 ns). Loaded over JTAG into SRAM:
+bitstream SHA256 f9d066de0874ff1842ba0dfd1eca3f617e6afea89eca957511456a794edf4448.
+Core SHA256 remains 66c81e689de6d18ac1a102e245b24ad3d5f071349fc269cf02ab2616ddb16bb7.
+STM32 was halted during FPGA replacement. Hardware scratch A55A/5AA5 and
+attention 0->0, 1->1, 0->1 readbacks pass (attention is an OR latch).
+FPGA reloaded once afterward to clear temporary test state.
+SPI FLASH NOT WRITTEN: FPGA image is volatile and must be reloaded after
+power cycling; old boot flash remains. Receipt build/controller-board/sram-downloaded.json.
+
+New STM32 backend programmed, verified and reset. ELF SHA256
+18fa6512894eeace422c3c4ee81f37e82290298e1da64c873869f725a6fd0e54.
+Fresh verified 512 KiB backup:
+build/stm32-disk/backups/before-disk-backend-20261026T205801897854Z.bin.
+Programming receipt build/stm32-disk/programmed.json. Two USB status reports
+confirm FAT mounted, drives 0-3 READY, commands/errors/trace_dropped all zero,
+fixed seek delay 500 us. This is the firmware with busy-seek recovery fix.
+No physical disk diagnostic or sector-transfer acceptance yet after these updates.
+
+Serial monitors ACTIVE under build/serial-logs/20261026T205931Z/:
+HP console FTDI AH01E1EM /dev/ttyUSB4 at 2400 7E2, STM32 /dev/ttyACM0.
+The other ttyUSB0-3 devices belong to the laptop modem. USB reset removed the
+STM32 serial ACL; user restored it with sudo setfacl -m u:mattis:rw /dev/ttyACM0.
+Monitor build/serial-logs/monitor-reconnect.py keeps HP open and retries STM32
+after disconnect/permission changes; sends ? only to STM32, never HP input.
+Aggregate verification build/hardware-update-20261026.json. User can retry
+the diagnostic now. Older 'not downloaded' and SRAM hash paragraphs below
+describe superseded states, not the current running images.
+
+## RTE-II boot regression with production RTL
+
+User requested RTE-II as a broader regression after the SEEK correction.
+Both 500 us and 4000 us seek cases PASS: disk bootstrap, SET TIME, ON,FMGR,
+DL with SYS/AUX labels and directory headers, then return to FMGR prompt.
+The actual CPU/DMA loads RTE from the original image; no memory checkpoint.
+Each run captures 17 SEEK and 30 READ requests, including 13 seeks whose
+completion attention was suppressed by CLC. This exercises READ submitted
+before positioning completes, with the worker finishing movement while
+suppressing the seek's attention. CLC does not cancel drive positioning;
+the internal seek_aborted latch refers only to completion attention.
+No WRITE requests occur. No additional controller or firmware changes needed
+for this boot test; no hardware programmed.
+
+Run `python3 scripts/hp2116_rte_boot.py --run --out build/hp2116-rte-boot/final`.
+The script prepares isolated sources, builds with pinned Verilator Docker,
+and checks console output, unexpected halt and timeout. Final receipts/logs
+under that directory match source/generated/log hashes. Final simulated
+completion times 336.016 ms / 374.394 ms. Forced MAX_MS=1 fails explicitly.
+Original disk/loader files unchanged; simulated writes are not persisted.
+
+Limits: this uses the SystemVerilog backend model, not the C++ ARM image or
+physical HP. Numeric fields in DL are garbled (e.g. CR=;;;;:), also visible
+in the reference boot screenshot; their cause/correctness is not established.
+Only labels/headers and return to prompt are checked. A 1 ms console-reply
+experiment failed to reach FMGR at both seek delays; final tests retain
+the original 20/100 ms reply delays. Exploratory logs are separate from final
+acceptance. See diagnostics/hp13210/rte-boot.md for details.
+
 ## SEEK correction in production RTL (not downloaded)
 
 User authorized changing Verilog and validating seek behavior. The current
 source differs from the SRAM image still running on the board. SEEK now
 requests backend service at RAR acceptance but only raises HP flag on backend
 attention. ADDRESS RECORD remains immediate. Extended tests exposed and fixed
-STATUS aborting SEEK (step21 E10), wrong-drive abort selection, Busy appearing
+STATUS suppressing SEEK attention (step21 E10), wrong-drive abort selection, Busy appearing
 too late, and acknowledgements lost under overlapping/wide STC,C strobes.
 An eight-packet command/RAR FIFO now prevents a later STATUS or closely spaced
 SEEK from replacing a pending backend request. CSR consumes one packet;

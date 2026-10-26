@@ -7,7 +7,7 @@
 
 struct Bus : hp::Bus {
   uint16_t csr=0, cmd=0, rar=0, word=0, attention=0, status[4]={};
-  std::vector<uint16_t> output;
+  std::vector<uint16_t> output, attention_writes;
   unsigned consumed=0;
   std::vector<unsigned> accesses;
   uint16_t read(uint16_t reg) override {
@@ -24,7 +24,7 @@ struct Bus : hp::Bus {
     accesses.push_back(0x10000U|reg);
     if (reg==hp::SetStatus) status[value>>14]|=value&0x1fff;
     else if (reg==hp::ClearStatus) status[value>>14]&=~(value&0x1fff);
-    else if (reg==hp::Attention) attention|=value;
+    else if (reg==hp::Attention) { attention|=value; attention_writes.push_back(value); }
     else if (reg==hp::Data) { output.push_back(value); csr&=~0x40; }
     else assert(reg==hp::Csr);
   }
@@ -215,17 +215,52 @@ static void pending_and_check_tests() {
   assert(!f.images.reads);
   f.engine.step(4000); assert(f.images.reads==1);
   f.engine.step(4001); f.engine.step(4200); assert(!f.engine.active());
-  f.bus.command(6,0,{1,0,0}); f.engine.step(5000);
-  f.bus.input(1); f.engine.step(5001); // One sector to check.
-  f.engine.step(5002);
-  for (unsigned i=0;i<128;++i) { f.bus.csr|=0x40; f.engine.step(5003+i); }
-  assert(!f.engine.active() && f.bus.output.back()==0);
   // A command during a stream is captured despite CSR's destructive read.
   Fixture q;
   q.bus.command(2,0,{0,0,0}); q.engine.step(0); q.engine.step(1);
   q.bus.command(3,1,{7,0,0}); q.engine.step(2);
   q.engine.step(200); q.engine.step(201); q.engine.step(4201);
   assert(q.bus.attention&2);
+}
+static void check_data_tests() {
+  Fixture f;
+  for (unsigned d=0; d<4; ++d) f.images.online[d]=true;
+  auto check = [&](unsigned drive, hp::Address address, uint16_t count, bool eoc) {
+    f.engine.begin();
+    f.bus.attention=8; // Completion must not manufacture a drive attention bit.
+    f.bus.attention_writes.clear();
+    f.bus.output.clear();
+    f.bus.consumed=0;
+    take_trace(f.trace);
+    f.bus.command(6,drive,address); f.engine.step(0);
+    assert(f.engine.active() && (f.bus.status[drive]&hp::Busy));
+    f.bus.input(count); f.engine.step(1);
+    // No more HP words or STC pulses. Even slow polling must not turn CHECK
+    // into a read timeout; it is an autonomous operation (manual 3-28/29).
+    for (unsigned i=0; i<4 && f.engine.active(); ++i)
+      f.engine.step(1000+i*1000);
+    assert(bool(f.bus.status[drive]&hp::EndCylinder)==eoc);
+    assert(!f.engine.active() && !(f.bus.status[drive]&hp::Busy));
+    assert(f.bus.consumed==1 && f.bus.output.empty());
+    assert(f.bus.attention==8 && f.bus.attention_writes==std::vector<uint16_t>{0});
+    const auto trace=take_trace(f.trace);
+    assert(!contains(trace,"TO") && contains(trace,"CM"));
+    assert(contains(trace,"EC")==eoc && f.engine.errors()==0);
+    assert(f.images.reads==0 && f.images.writes==0);
+  };
+  // DSN151302 S1 step30: exactly 48 sectors fits; 49 attempts to cross EOC.
+  check(0,{0,0,0},49,true);
+  for (unsigned n : {1U,2U,4U,8U,16U,32U,48U}) check(0,{0,0,0},n,false);
+  // Both two-head cylinder boundaries, on every drive, including nonzero
+  // starting sectors and the very last sector of each track.
+  for (unsigned d=0; d<4; ++d) for (unsigned h=0; h<4; ++h)
+    for (unsigned sector : {0U,7U,23U}) {
+      const unsigned available=(h%2 ? 24U : 48U)-sector;
+      check(d,{0,h,sector},available,false);
+      check(d,{0,h,sector},available+1,true);
+    }
+  check(0,{0,0,0},0,false); // Preserve the model's zero-count no-op.
+  check(0,{0,0,0},0xffc1,false); // Only the six count bits are significant.
 }
 static void reset_and_boundary_tests() {
   Fixture f;
@@ -359,9 +394,9 @@ static void unsupported_command_tests() {
 int main() {
   static_assert(hp::ImageBytes==4988928);
   config_tests(); startup_seek_tests(); seek_geometry_tests(); seek_busy_recovery_tests(); read_tests(); write_tests();
-  end_cylinder_and_errors(); pending_and_check_tests();
+  end_cylinder_and_errors(); check_data_tests(); pending_and_check_tests();
   reset_and_boundary_tests();
   trace_tests();
   unsupported_command_tests();
-  puts("PASS: configuration, geometry, startup/POPIO refresh, concurrent seeks/abort, timer rollover, reads, writes, partial sectors, EOC, media failures, pending commands, check-data, trace ordering, E01-E10 and queue overflow");
+  puts("PASS: configuration, geometry, startup/POPIO refresh, concurrent seeks/abort, timer rollover, reads, writes, partial sectors, EOC, media failures, pending commands, autonomous CHECK/48-49 sector boundaries, trace ordering, E01-E10 and queue overflow");
 }

@@ -67,7 +67,7 @@ class Backend {
   // Experimental fixed delay; not a measured mechanical drive timing model.
   static constexpr uint32_t WordTimeoutUs=100, SeekTimeUs=500;
  private:
-  enum Mode { Idle, Read, Write, CheckCount, Check } mode_=Idle;
+  enum Mode { Idle, Read, Write, CheckCount } mode_=Idle;
   struct Drive { unsigned cylinder=0; bool seeking=false; uint32_t deadline=0; } drive_[Drives];
   Bus &bus_;
   Images &images_;
@@ -80,7 +80,7 @@ class Backend {
   Event last_error_=Event::Boot;
   bool pending_=false, read_wait_=false;
   bool failed_[Drives] = {};
-  unsigned selected_=0, command_=0, position_=0, length_=0, check_words_=0;
+  unsigned selected_=0, command_=0, position_=0, length_=0;
   Address address_;
   uint32_t deadline_=0, refresh_=0, commands_=0, errors_=0;
   void status(unsigned drive, uint16_t bits, bool set=true);

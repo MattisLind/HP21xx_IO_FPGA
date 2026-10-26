@@ -3,6 +3,11 @@
 The [SEEK correction and validation](seek-validation.md) describes the current
 production RTL, its request queue, and the diagnostic seek regression coverage.
 
+The [RTE-II boot regression](rte-boot.md) boots the original disk image with
+the production controller, starts FMGR, and checks `DL` and return to its
+prompt at two seek delays. This also exercises CLC followed by READ while
+positioning is still in progress.
+
 The [HP2116 SEEK timing experiment](seek-timing.md) reproduces the hardware's
 step 2 E21 in the full CPU simulation and records the command-flag, attention,
 STATUS, and backend-capture ordering.

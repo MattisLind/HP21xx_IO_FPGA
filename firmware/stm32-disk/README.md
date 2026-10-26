@@ -213,7 +213,7 @@ CSR read acknowledges command IRQ. Capture the report promptly after a failure.
 | READ DATA (`2`) | Preload the rest of the current two-head cylinder into RAM; present one little-endian word at a time using the DATA/CSR handshake. |
 | WRITE DATA (`1`) | Collect words in RAM; zero-fill the rest of a partially written sector after transfer timeout; write completed sectors and synchronize before attention. |
 | INITIALIZE DATA (`9`) | Same basic write path and zero-valued attention completion; cylinder attributes/protection are not implemented yet. |
-| CHECK DATA (`6`) | Read the sector count, clock zero words as in the model, and track the cylinder boundary. No magnetic media/CRC fault simulation. |
+| CHECK DATA (`6`) | Accept one six-bit sector count and complete without HP data transfers. Exactly the remaining sectors succeeds; exceeding the two-head cylinder boundary sets end-of-cylinder before command completion. Zero remains a no-op. No magnetic media/CRC fault simulation. |
 | REFINE SECTOR (`5`) | Complete using a zero-valued attention write, as in the model. |
 | ADDRESS RECORD (`B`) and status (`0`) | RAR capture and status-word generation remain in the existing FPGA. |
 | Data ending at head 2 or head 0 | Stop at the same two-head boundary; never access outside the image or consume the reference write loop's extra word after EOC. |

@@ -205,30 +205,36 @@ void Backend::step(uint32_t now) {
   }
   if (mode_==CheckCount) {
     if (csr&0x40) {
-      check_words_=(bus_.read(Data)&63)*Words;
-      length_=(check_words_*2<length_) ? check_words_*2 : length_;
-      if (!check_words_) { complete(false); return; }
-      mode_=Check;
-      read_wait_=false;
+      // CHECK accepts one sector-count word, then proceeds without HP data
+      // transfers (13210A manual 3-28/29). Waiting for further STC pulses
+      // makes it time out before reaching the cylinder boundary.
+      const unsigned sectors=bus_.read(Data)&63;
+      if (sectors*SectorBytes>length_) {
+        mark(Event::EndCylinder);
+        status(selected_,EndCylinder);
+      }
+      // Exactly the remaining sectors succeeds; only a request beyond them
+      // sets EOC. A zero-valued attention write still raises the command flag.
+      complete(false);
     } else if (expired(now,deadline_)) {
       error(Event::CountTimeoutError); status(selected_,Overrun); complete(false);
     }
     return;
   }
-  // READ DATA and CHECK DATA: stage a word, then await the HP's next STC.
+  // READ DATA: stage a word, then await the HP's next STC.
   if (read_wait_) {
     if (!(csr&0x40)) {
-      if (expired(now,deadline_)) { mark(Event::Timeout); complete(command_!=6); }
+      if (expired(now,deadline_)) { mark(Event::Timeout); complete(); }
       return;
     }
     read_wait_=false;
     if (position_==length_) {
-      if (mode_==Read || length_<check_words_*2) { mark(Event::EndCylinder); status(selected_,EndCylinder); }
-      complete(command_!=6);
+      mark(Event::EndCylinder); status(selected_,EndCylinder);
+      complete();
       return;
     }
   }
-  const uint16_t word=mode_==Read ? uint16_t(buffer_[position_]|(uint16_t(buffer_[position_+1])<<8)) : 0;
+  const uint16_t word=uint16_t(buffer_[position_]|(uint16_t(buffer_[position_+1])<<8));
   bus_.write(Data,word);
   position_+=2;
   read_wait_=true;

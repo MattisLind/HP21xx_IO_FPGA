@@ -132,8 +132,11 @@ enables written explicitly.
 SEEK address acceptance acknowledges the data channel, marks the drive busy,
 and queues backend service. It does not raise the HP command flag. The backend
 attention write raises that flag at completion. ADDRESS RECORD retains immediate
-completion. STATUS does not abort a seek, commands select their own drive for
-abort handling, and CRS aborts attention for all outstanding drives.
+completion. STATUS preserves seek attention, commands select their own drive
+for attention-suppression handling, and CRS suppresses attention for all
+outstanding drives. The internal `seek_aborted` mask suppresses completion
+attention only: CLC/CRS do not cancel drive positioning. The backend worker
+continues to the target cylinder and clears Busy when positioning finishes.
 
 Eight command/RAR packets are retained in order, so later STATUS or SEEK words
 cannot replace a pending backend request. Read CSR, then COMMAND, then RAR for
