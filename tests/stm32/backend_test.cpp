@@ -9,7 +9,9 @@ struct Bus : hp::Bus {
   uint16_t csr=0, cmd=0, rar=0, word=0, attention=0, status[4]={};
   std::vector<uint16_t> output;
   unsigned consumed=0;
+  std::vector<unsigned> accesses;
   uint16_t read(uint16_t reg) override {
+    accesses.push_back(reg);
     switch (reg) {
       case hp::Csr: { auto v=csr; csr&=~0x80; return v; }
       case hp::Command: return cmd;
@@ -19,6 +21,7 @@ struct Bus : hp::Bus {
     }
   }
   void write(uint16_t reg, uint16_t value) override {
+    accesses.push_back(0x10000U|reg);
     if (reg==hp::SetStatus) status[value>>14]|=value&0x1fff;
     else if (reg==hp::ClearStatus) status[value>>14]&=~(value&0x1fff);
     else if (reg==hp::Attention) attention|=value;
@@ -79,8 +82,13 @@ static void startup_seek_tests() {
   assert(f.bus.status[0]==hp::FirstStatus && f.bus.status[2]==hp::NotReady);
   f.bus.command(3,1,{202,3,23}); f.engine.step(0);
   assert(f.bus.status[1]&(hp::Busy|hp::Seeking));
-  f.engine.step(3999); assert(!f.bus.attention);
-  f.engine.step(4000); assert(f.bus.attention==2);
+  f.engine.step(hp::Backend::SeekTimeUs-1); assert(!f.bus.attention);
+  f.bus.accesses.clear();
+  f.engine.step(hp::Backend::SeekTimeUs); assert(f.bus.attention==2);
+  assert((f.bus.accesses==std::vector<unsigned>{hp::Csr, hp::Command,
+          0x10000U|hp::ClearStatus, 0x10000U|hp::Attention}));
+  assert(f.engine.seek_completion_valid()==2);
+  assert(f.engine.seek_completion_command(1)==0x3001);
   assert(!(f.bus.status[1]&(hp::Busy|hp::Seeking|hp::FirstStatus)));
   // Invalid RAR does not address memory outside the image.
   f.bus.command(3,0,{203,0,0}); f.engine.step(5000);
@@ -88,6 +96,9 @@ static void startup_seek_tests() {
   f.bus.command(3,0,{0,0,0}); f.engine.step(6000);
   f.bus.cmd|=1<<2; // CLC/abort latch for drive zero.
   f.bus.attention=0; f.engine.step(10000); assert(!f.bus.attention);
+  assert(f.engine.seek_completion_valid()==3);
+  assert(f.engine.seek_completion_command(0)==0x3004);
+  assert(f.engine.seek_completion_command(1)==0x3001);
 }
 static void read_tests() {
   Fixture f;
@@ -172,8 +183,8 @@ static void reset_and_boundary_tests() {
   Fixture s;
   s.bus.command(3,0,{1,0,0}); s.engine.step(0xfffffff0U);
   s.bus.command(3,1,{2,0,0}); s.engine.step(0xfffffff1U);
-  s.engine.step(3983); assert(!s.bus.attention);
-  s.engine.step(3985); assert(s.bus.attention==3);
+  s.engine.step(hp::Backend::SeekTimeUs-17); assert(!s.bus.attention);
+  s.engine.step(hp::Backend::SeekTimeUs-15); assert(s.bus.attention==3);
   for (unsigned h=0;h<4;++h) {
     hp::Address a{0,h,23};
     assert(a.remaining()==(h%2 ? 256U : 25U*256));
@@ -258,9 +269,12 @@ static void trace_tests() {
   // Completion must restore drive context after an overlapping seek finishes.
   Fixture context;
   context.bus.command(3,1,{0,0,0}); context.engine.step(0);
-  context.bus.command(2,0,{0,0,0}); context.engine.step(3990); context.engine.step(3991);
+  context.bus.command(2,0,{0,0,0});
+  context.engine.step(hp::Backend::SeekTimeUs-10);
+  context.engine.step(hp::Backend::SeekTimeUs-9);
   take_trace(context.trace);
-  context.engine.step(4000); context.engine.step(4100);
+  context.engine.step(hp::Backend::SeekTimeUs);
+  context.engine.step(hp::Backend::SeekTimeUs+hp::Backend::WordTimeoutUs);
   assert((take_trace(context.trace)==std::vector<std::string>{"D1","SC","D0","TO","D0","CM"}));
 }
 static void unsupported_command_tests() {

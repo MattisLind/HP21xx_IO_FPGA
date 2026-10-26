@@ -1,0 +1,30 @@
+Address Word   Instruction          Meaning (all numbers octal)
+076000  103100 CLF  000000     Disable CPU interrupts
+076001  062032 LDA  076032     Cylinder 0
+076002  102614 OTA  000014     DADO: output cylinder before command
+076003  103714 STC  000014,C   DADO: start data channel and clear flag
+076004  062033 LDA  076033     SEEK, drive 0
+076005  102615 OTA  000015     COMMD: output command
+076006  106715 CLC  000015     COMMD: clear control
+076007  103715 STC  000015,C   COMMD: set control and clear flag
+076010  102214 SFC  000014     WAITD: skip if data flag is clear
+076011  026013 JMP  076013     Flag set: send second word
+076012  026010 JMP  076010     Flag clear: keep waiting
+076013  062032 LDA  076032     Head 0, sector 0
+076014  102614 OTA  000014     DADO: output head/sector
+076015  103714 STC  000014,C   DADO: start data channel and clear flag
+076016  102214 SFC  000014     WAITD: second-word acknowledgement
+076017  026021 JMP  076021     Flag set: finish handshake
+076020  026016 JMP  076016     Flag clear: keep waiting
+076021  062032 LDA  076032     Extra settling delay, not a diagnostic timing test
+076022  072034 STA  076034     Initialize private counter
+076023  036034 ISZ  076034     65536 increments; lets 4 ms seek worker finish
+076024  026023 JMP  076023     
+076025  102315 SFS  000015     Wait for command flag
+076026  026025 JMP  076025     No timeout: operator may halt to inspect P
+076027  102515 LIA  000015     Read attention only; does not issue status command
+076030  102000 HLT  000000     Checkpoint: A should be 000001; not automatic PASS
+076031  026030 JMP  076030     CONTINUE re-halts without starting another seek
+076032  000000 OCT  000000     
+076033  030000 OCT  030000     
+076034  000000 OCT  000000     Only memory word modified by test

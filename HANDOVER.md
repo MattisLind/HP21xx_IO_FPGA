@@ -4,6 +4,276 @@ Updated **2026-10-25**, Europe/Oslo. Read this first when continuing on the
 laptop beside the HP 2100. This is a summary of the conversation and actual
 bring-up state; some older README status paragraphs describe earlier stages.
 
+## Laptop update — 2026-10-26
+
+Full HP2116 CPU simulation now reproduces the hardware E21 using the actual
+DSN151302 binary plus the corrected board controller core. See
+diagnostics/hp13210/seek-timing.md and scripts/hp2116_seek_timing.py.
+The script copies sources into ignored build/hp2116-seek-timing/ and never
+edits the reference submodule. Verilator image 5.052 is available locally.
+core-500us.log: step2 RAR done at467560695ns; HP flag at+0.130us with
+attention0; backend captures3038 at+0.760us; HP reads attention0 at+103.360us;
+STATUS OTA at+106.860us; completion at+501.870us sees003C/abort1. E21 final
+P012136 A000021 B000004. core-late-capture.log adds2ms backend capture delay:
+startup and step2 requests collapse into one pending bit; first capture003C;
+same E21. core-4ms.log instead fails E64 in step1 (busy status000005).
+These reproduce both observed SK/SA and unsupported-request failure modes.
+Completed comparisons: core-50us.log reaches cylinder1 in step21 with existing
+flag behavior (short delay hides race). core-completion-only-late.log (500us
+seek,2ms capture) and core-completion-only-4ms.log (4ms seek,no capture delay)
+also reach cylinder1/step21 using a SIMULATION-ONLY change that suppresses
+the early HP flag for SEEK while preserving backend IRQ and ADDRESS RECORD.
+HP flag then rises on worker attention write; delayed capture still reads3000,
+completion abort0,attention1. These runs intentionally stop at cylinder1;
+they establish step2 progress, NOT full diagnostic acceptance. core-slow-after-
+config.log changes CPU divider1->15 at initialHLT74, after UART configuration;
+it reports E63 NO DATA FLAG during startup step00, exposing a separate strobe/
+handshake dependency. Do not count slowCPU as successful E21 timing control.
+Experimental generated sources/runtime settings are hashed in
+build/hp2116-seek-timing/sources.json. Verilator builds and diff checks pass;
+reference submodule unchanged. Board RTL/firmware untouched by these simulation
+experiments; corrected FPGA is still SRAM-only. Before applying any new board
+change, extend simulation beyond step21 and check command/abort semantics.
+
+500µs experiment result: HP again H44 step02/E21. New capture contains
+D0 SK / D0 SC, then D0 ?? / D0 E04. Counters2commands/1error, latest
+Command0x003C/RAR0/request0x00C0; completion snapshot valid1/raw0x3000.
+Unlike prior4ms repeat, no SA in this capture; however source startup HLP2
+also issues SEEK for ready drives, so captured SC cannot yet be assigned to
+section1 step02. Do not claim shortening fixes the failing diagnostic seek.
+Remaining issue is command/flag sequencing; avoid further blind delay tuning.
+Need phase-correlated capture or standalone diagnostic-like status/seek path.
+FPGA fix SRAM-only;500µs STM32 remains installed; both captures active.
+
+
+**CURRENT STM32 SEEK DELAY IS500µs, replacing4000µs for a controlled test.**
+User authorized experimenting with shorter timing. All seeks currently use
+this fixed500µs delay; it is NOT yet cylinder-distance-dependent or a physical
+drive timing model. USB status explicitly reports the configured delay.
+Seek deadline/rollover/overlap tests now use the configured constant;
+native sanitizer regression and ARM build pass. Previous STM32 flash was
+backed up and verified; new image programmed/verified/reset successfully.
+Current ELF SHA256: `d135a449820c33b860b9ca18759a493f9ccb60cf0d06e0c35fdb908636650af3`.
+All four drives READY, zero counters/errors on startup. Both serial captures
+running in build/serial-logs/20261026T190534Z/. Diagnostic retry is pending.
+FPGA correction is still the previously verified SRAM image; no FPGA reset,
+reprogramming, or flash write during this STM32 timing experiment.
+
+
+User timing clarification: the reference's4ms seek delay was chosen only to
+make DSN pass in simulation; it is NOT a measured real-drive requirement.
+Treat firmware SeekTimeUs=4000 as tunable, not an authoritative hardware
+constraint. Shorter completion is a valid controlled experiment. Existing
+WAITS source calls a1ms delay before polling flag and permits105ms total;
+this is not proof that completion must take4ms. Retain the distinction:
+shortening delay may avoid the observed early flag/status/abort race, but
+passing at one delay alone does not validate command IRQ/capture semantics.
+No timing parameter or firmware changed in response to this clarification.
+
+
+Latest repeated DSN run: same H44/E21 HP halt, but new STM32 trace D0 SK,
+D0 SA (seek dispatched then attention suppressed), not new unsupported
+commands. Counters5commands/3errors: error count unchanged from prior run;
+last_errorE04 is historical. Dispatch Command0x3038/RAR0, completion
+Command0x003C for drive0. Live OpenOCD read confirms Command0x003C and
+Attention0x0000. Thus drive0 abort was clear at dispatch and set by completion,
+with live opcode replaced from3 to0. Supports early completion/status race;
+exact diagnostic bus timing still to reproduce before altering seek/flag RTL.
+HP halted; no new resets or programming; current corrected SRAM image remains.
+
+
+After successful standalone SEEK on corrected FPGA SRAM, DSN151302 retry
+still failed H44/E21 at common halt P012136/M012135, user A21/B4. New trace
+since standalone: D3 ?? E04, D0 ?? E04, D0 ?? E04. Counters now4commands/
+3errors, last dispatch Command0x003C/RAR0/request0x00C0. No new SK or SC.
+The valid completion snapshot0x3000 is retained from the earlier standalone,
+not proof of a diagnostic seek. Current remaining issue is command capture/
+handshake timing; attention zero-write corruption is independently repaired.
+Candidate: FPGA set_irq_ff sets command flag at RAR completion, whereas seek
+worker takes4ms. DSN WAITS polls after1ms and then issues STAT, which replaces
+live Command with0 and can abort seek attention. Standalone intentionally
+waited65536 increments and issued no STAT. Reference HDL also has early flag
+behavior, so do not modify on speculation; reproduce realistic DSN path first.
+Next useful test: diagnostic-like one-shot without the long settling delay,
+preserving exact attention read and following status sequence, with retained
+IRQ-time command evidence or simulated timelines to locate the race.
+HP halted. Corrected FPGA remains SRAM-only; no power cycle.
+
+
+Latest hardware acceptance: user reran unchanged seek-once at076000 on the
+corrected FPGA SRAM image and reported A000001 at its halt. Captured STM32
+trace D0 SK D0 SC; commands1/errors0/trace_dropped0, Command0x3000/RAR0,
+completion valid0x1/drive0 raw0x3000. Standalone drive0/cylinder0 seek and
+attention readback now work. Full DSN151302 remains untested after the FPGA
+fix; disk-sector transfer/boot acceptance remains pending. Both logs active.
+
+
+**CURRENT FPGA IS A CORRECTED VOLATILE SRAM IMAGE. Do not power-cycle yet.**
+Write-contamination correction built, loaded over JTAG with STM32 halted,
+and tested on hardware. SPI flash was NOT written; power cycling restores
+the old defective write capture. Current bitstream SHA-256: `2228041eb63415d1898589663273358e9003d8016ac62290d14887056a762adc`.
+Receipt: build/controller-board/sram-downloaded.json. ISE passes50MHz timing
+(minimum period6.325ns). All22 controller variants, board/LED simulations,
+and22 Python tests passed. Expanded tests assert NWE during address phase,
+including NE permanently active, and test zero/one-hot attention plus zero
+SET/CLEAR status masks. Pre-fix RTL fails the zero attention test; fixed passes.
+
+Core now retains last qualified write data/address and commits once at
+synchronized NWE rising edge. All FSMC write targets (CSR/data/attention/
+status/scratch) use retained data. Existing read acknowledgement path unchanged.
+After new FPGA SRAM load, direct hardware attention readbacks were:
+initial0000; write0000 ->0000; write0001 ->0001 (twice).
+Evidence: build/controller-board/attention-write-hardware.log.
+STM32 was then reset to run; FAT mounts, drives0–3 READY, counters/errors0.
+Both serial captures are active in build/serial-logs/20261026T185220Z/.
+HP remains halted. Next user action: set P076000 and run the existing
+seek-once program again, expecting P076031/A000001. Full diagnostic still
+pending; do not claim it passes. Existing seek test binary remains valid.
+
+Linux local Icarus10.3 launchers are in build/tools/bin; use on PATH with
+Python3.12 for make test/controller-build. Compatibility edits remove
+localparam reg syntax and a testbench sformatf; simulation runner explicitly
+rejects FATAL output because this old vvp can return exit0 after fatal.
+Ignored config/toolchain.local.json selects full ISE image/license MAC from
+original handover; config/board.local.json matches example carrier pins.
+No permanent FPGA flash update has been performed for this correction.
+
+
+**Isolated hardware reproducer confirmed:** user set A030000/P076005 and
+single-stepped OTA15 once, then left HP halted. Direct FPGA reads confirmed
+Attention0x0000 and Command0x3000. A single OpenOCD halfword write of **zero**
+to Attention CPU address0x6000000C then produced **0x0006**, repeated on
+readback. No HP seek sequence or new firmware was involved. Evidence:
+`build/stm32-disk/attention-zero-write.log`. This proves the attention write
+path incorrectly adds bits1/2 on a zero-data transaction; the value equals
+AD register address0x6. Strong evidence for multiplexed address/data capture,
+though the precise sampling edge still requires waveform/simulation analysis.
+Current attention is0x0006; do not interpret it as real drive attention.
+HP remains halted after OTA15; no STC, reset, or programming performed.
+Next: reproduce real FSMC address/write overlap offline, fix write-data
+qualification/latching, regress all affected register writes, then build and
+review before installing FPGA image. A local Icarus package is extracted in
+build/tools/iverilog/root; invoke iverilog with -B pointing at its extracted
+usr/lib/x86_64-linux-gnu/ivl directory (not installed system-wide).
+
+
+Latest hardware result: standalone seek-once loaded from PAPERTAPE completed
+at P076031 with A000007 (expected000001). STM32 trace D0 SK D0 SC;
+commands=1/errors=0, request0x00C0, dispatch Command0x3000, RAR0;
+completion valid0x1/drive0 raw0x3000 (not aborted). Direct running-target
+OpenOCD halfword reads repeatedly confirm FPGA Attention at0x6000000C
+is0x0007; Command at0x60000004 is0x3000. Therefore extra attention bits
+are present on the FPGA/FSMC side, not merely HP readback corruption.
+Strong but unproven candidate: Attention AD address0x6 being OR-latched
+as write data during multiplexed address/data transition; address0x6 OR
+intended drive0 bit0x1 equals observed0x7. Core attention writes are
+level-sensitive while NWE active. Need waveform/simulation or directed
+transport evidence before modifying RTL. Other possible stale/spurious
+writes not yet ruled out. HP remains at standalone halt; preserve state.
+Current serial capture: build/serial-logs/20261026T183953Z/ (active).
+SD mount initially failed after reconnect; user confirmed card inserted,
+explicit reset recovered FAT and drives0–3 READY. Xilinx RAM firmware was
+reloaded; JTAG and ST-Link contact verified. PAPERTAPE/tapes/seek-once.abin
+is the verified224-byte absolute image, copied without changing ptape.cfg.
+
+
+Latest preparation after user returned: a 29-word one-shot SEEK test is ready
+at076000–076034, generated by scripts/hp13210_seek_diagnostic.py; listing
+in diagnostics/hp13210/programs/seek-once.lst. It matches diagnostic I/O
+ordering, adds a65536-ISZ settling delay, captures attention in A, and halts
+at076030 (P076031). No following status command. Expected A000001. Six
+related offline tests pass. Not loaded/run on HP yet; no firmware change.
+Attempt to restart serial capture failed: neither FTDI nor STM32 USB is
+currently enumerated (only laptop modem serial devices). Capture is OFF.
+Reconnect hardware and rediscover ports before running the test.
+
+
+### End-of-day state — resume here tomorrow
+
+User stopped work on 2026-10-26. HP is halted; the six-word standalone
+command-latch loop at **076000–076005 octal** was examined and is unchanged.
+The user reported the FPGA LED continuously lit even with HP halted; cause
+not established. Do not dismiss that observation as rapid loop activity.
+Earlier unexpected halt during full-speed execution was not reproduced;
+there is no evidence that the program modified memory.
+
+The last DSN151302 retry still failed H44/E21 (same error halt/registers).
+This time STM32 captured `D0 ?? E04`, commands=1/errors=1,
+request=0x00C0, dispatch Command=0x003C, RAR=0; no seek completion snapshot
+was valid. Thus no seek was dispatched on that run, unlike the preceding
+`D0 SK D0 SA` run. Reordering completion reads has not resolved the issue.
+
+Standalone test generated by `scripts/hp13210_command_diagnostics.py`:
+
+```text
+076000 103100  CLF 0
+076001 106715  CLC 15
+076002 062005  LDA 076005
+076003 102615  OTA 15
+076004 026002  JMP 076002
+076005 030000  command literal
+```
+
+User confirms 32K words; top-64-word loader at 077700–077777. Test moved
+from 002000 to 076000 before being entered. DSN tape loads through 012402;
+source documents lower normal buffers/custom workspace. Do not overwrite
+DSN again or assume the custom-test builder will preserve high-memory code.
+The loop issues no STC and starts no disk transfer. Direct ST-Link FSMC
+halfword reads at **0x60000004** repeatedly returned **0x303C**: command
+nibble3/drive0 correct; low0x3C is all four retained abort bits. This verifies
+held command readback but not interrupt-time capture. The first inspection
+briefly halted/resumed STM32; the latest reads worked while it ran:
+
+```sh
+build/stm32-tools/openocd/xpack-openocd-0.12.0-4/bin/openocd \
+  -f interface/stlink.cfg -f target/stm32f4x.cfg \
+  -c init -c 'mdh 0x60000004 1' -c 'mdh 0x60000004 1' -c shutdown
+```
+
+Next: confirm current hardware state, investigate persistent activity LED
+with HP halted, then vary the held command/drive pattern at076005 and compare
+actual Command readback (mask0xF303) before exercising STC/seek handshakes.
+Do not infer command corruption solely from the missing attention; distinguish
+live-register replacement, FSMC transport, and HP bus decode/timing.
+Both capture files are under `build/serial-logs/20261026T170849Z/`;
+serial capture is being stopped for the overnight pause. Restart explicitly.
+HP port remains FTDI AH01E1EM /dev/ttyUSB4 at2400 7E2; STM32 CDC /dev/ttyACM0.
+No further firmware changes/programming after the seek-snapshot build.
+The reference submodule is now initialized at the pinned commit. Diagnostic
+source archive and extracted revisions are in ignored build/reference/hp-diagnostics/.
+There are uncommitted source/test/documentation changes; preserve them.
+
+
+Latest retry preparation: first corrected-firmware run failed H44/E21 with
+STM32 `D0 SK D0 SA`; dispatch command=0x3038, RAR=0, commands=1, errors=0.
+HP is halted. Seek completion was changed to sample Command before clearing
+seek status, matching the reference. Per-drive completion Command snapshots
+and a validity mask are now reported by USB `?` without extra FSMC reads.
+Native sanitizer tests (including ordering and retained abort/completion values)
+and ARM build passed. This newer firmware was backed up, programmed, verified,
+and reset; ELF SHA-256: `cf5a99b08b528ae37ba79f07a618e1d430afda1fc2ce5ea2660f58bf73b257ea`.
+Both serial monitors restarted in `build/serial-logs/20261026T170849Z/`.
+Startup confirms all four drives READY, zero commands/errors. Retry pending;
+the ordering change is not yet proven to resolve E21. Earlier receipt/hash
+below refer to the preceding firmware build.
+
+The corrected STM32 disk backend has now been built, programmed, verified,
+and reset to run on the Linux laptop. Native sanitizer regression tests passed.
+A full 512 KiB flash backup was saved and verified before programming.
+Receipt: `build/stm32-disk/programmed.json`; ELF SHA-256: `d0673b65da12f74cf1a721983d4daf0f455f29d7607c71e5ccc606d0d218ad6a`.
+USB status after programming: FAT mounted, drives 0–3 READY, commands=0,
+errors=0, trace_dropped=0, raw FSMC observations all zero, last_error=none.
+Capture: `build/stm32-disk/after-program-usb.log`. Diagnostic retry is pending;
+this does not establish disk operation or resolution of unexpected commands.
+
+Local pinned STM32 dependencies and Python 3.12 live in `build/stm32-tools/`;
+paths are in ignored `config/stm32.local.json`. Build using local CMake on PATH
+and `PYTHON=.../build/stm32-tools/python-runtime/cpython-3.12.15-linux-x86_64-gnu/bin/python3.12`.
+A Python 3.8 relative `__file__` issue in `scripts/stm32_disk.py` was fixed.
+Xilinx firmware loaded; JTAG detects XC6SLX9 ID 0x24001093. HP console is
+`/dev/ttyUSB4`; STM32 CDC is `/dev/ttyACM0`. ST-Link contact passed.
+The older narrative below describes the prior Mac handover state.
+
 ## Start here
 
 The user is moving development to a laptop near the HP 2100S so that both

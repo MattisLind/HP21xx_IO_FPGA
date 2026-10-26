@@ -1,5 +1,9 @@
 # HP 13210 flag bring-up
 
+The [HP2116 SEEK timing experiment](seek-timing.md) reproduces the hardware's
+step 2 E21 in the full CPU simulation and records the command-flag, attention,
+STATUS, and backend-capture ordering.
+
 ## Latest retest: E64 at initial status
 
 After leaving configuration/custom-test entry (clear switch-register bits 2
@@ -383,3 +387,76 @@ check instruction encodings and absolute-tape record/checksum integrity.
 `make test` includes these checks and the existing FPGA simulations. These
 programs have not yet run on the real HP, and the model is not a CPU or bus
 timing simulation. No FPGA or STM32 download is required to generate them.
+
+## Standalone command-latch stimulus
+
+Generate with `python3 scripts/hp13210_command_diagnostics.py`. Both variants
+start at **076000**, use command select code **15 octal**, in the user-confirmed 32K-word memory, below the loader at 077700–077777.
+The supplied DSN151302 tape loads only through 012402. Its source places the normal
+read/write buffers after BUFB and the custom-test workspace at 016000
+(up to the configurator / 020000 limit). Custom-test construction also consults
+LWAM; do not rely on the standalone code surviving later custom-test editing.
+The selected six/seven words at 076000 do not overlap the supplied diagnostic
+load or the user-confirmed top-64-word loader. Neither issues STC, sends disk data, or
+starts a seek/read/write. CLF 0 disables interrupts; CLC 15 clears interface
+control. Interrupt state is not restored.
+
+Start with [command-latch-hold.lst](programs/command-latch-hold.lst): it writes
+`030000` (seek opcode, drive 0) once and stops at HLT 00, P=076005. This halt
+is an inspection checkpoint, **not a hardware PASS**. A should be 030000.
+Continuing executes a JMP back to the write sequence, not the literal data.
+
+[command-latch-loop.lst](programs/command-latch-loop.lst) repeats the same
+write until the operator halts. Enter its six listed words and set P=076000.
+The default literal is at 076005 (076006 for the held variant). Changing this
+literal permits other opcode/drive patterns without issuing STC. All values
+in the listings are octal. Both have matching `.asm` and `.abs` artifacts.
+
+To assess the hardware result, inspect the FPGA Command/status register through
+STM32 FSMC at CPU address **0x60000004** while the HP holds this pattern. The
+expected command nibble is **3**, drive **0**, protected/defective bits **0**:
+`(raw & 0xF303) == 0x3000`. Abort bits 5:2 may retain earlier history and are
+not part of that comparison. A returned HP attention word is not command
+readback. USB `?` reports the last *dispatched* command, which this no-STC test
+does not update; it cannot verify this test. Use a deliberate direct Command
+read, not CSR (CSR reads acknowledge IRQ). No new firmware is needed.
+
+Compare the held test with the loop to separate retained latch values from
+transient timing. After either test, operator-halt the HP before inspection.
+A successful result establishes only this register-write/read path; it does
+not validate command IRQ capture, seek handshake, or disk operation. These
+programs have passed offline flow/encoding/tape checks but have not yet run
+on the HP. Existing serial capture remains active; no program has been sent
+to the HP by the generator.
+
+## One-shot standalone SEEK at 076000
+
+Generate with `python3 scripts/hp13210_seek_diagnostic.py`.
+[seek-once.lst](programs/seek-once.lst) contains 29 words at 076000–076034;
+matching `.asm` and `.abs` files are provided. These replace only the earlier
+standalone loop, below the top-64-word loader, not DSN151302.
+
+The test uses cylinder/head/sector/unit all zero. Its I/O follows DSN151302
+part01 SEEK/DADO/COMMD: OTA14, STC14,C; OTA15, CLC15, STC15,C;
+SFC14 wait; OTA14, STC14,C; SFC14 wait. The helper calls, reporting, and
+arithmetic for nonzero head/sector/unit are omitted. Unlike the complete DSN
+path, no subsequent status command replaces the seek command.
+
+After the second handshake, a private ISZ counter at076034 performs 65536
+increments, providing extra settling time for the 4ms firmware worker. This
+is deliberately longer than the diagnostic's initial 1ms attention poll;
+it is not a calibrated timing test or an exact instruction-for-instruction
+reproduction. Then SFS15 waits for command flag and LIA15 captures attention.
+HLT00 at076030 (P=076031) is a checkpoint: A should be000001. CONTINUE
+re-halts without issuing another seek. The program does not automatically
+judge attention. Only076034 is written by the program; it returns to zero.
+
+No timeout is implemented. If it keeps running, operator-halt and report P:
+076010–076012 indicate the first data wait;076016–076020 the second data
+wait;076025–076026 the command-flag wait. Do not single-step to evaluate
+normal timing; enter/examine the listing, set P=076000, and run once.
+No disk-sector data is written, no DMA is used, and CPU interrupts remain
+disabled. Record A/P and the STM32 trace before changing the command register.
+Offline tests exercise the I/O order, both outcomes of delayed flag polls,
+missing acknowledgements, exactly65536 increments, and the private write range.
+Hardware outcome is pending.

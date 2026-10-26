@@ -11,8 +11,10 @@ void Backend::status(unsigned d, uint16_t bits, bool set) {
 void Backend::begin() {
   mode_=Idle;
   pending_=false;
+  seek_completion_valid_=0;
   for (unsigned d=0; d<Drives; ++d) {
     drive_[d]=Drive{};
+    seek_completion_command_[d]=0;
     failed_[d]=false;
     status(d, 0x1fff, false);
     status(d, images_.ready(d) ? FirstStatus : NotReady);
@@ -78,7 +80,7 @@ void Backend::dispatch(uint16_t cmd, uint16_t seek, uint32_t now) {
     complete();
     return;
   }
-  if (command_==3) { // SEEK RECORD: independent 4 ms worker per drive.
+  if (command_==3) { // SEEK RECORD: independent timed worker per drive.
     Drive &d=drive_[selected_];
     if (d.seeking || !address_.valid()) {
       error(d.seeking ? Event::SeekBusyError : Event::SeekAddressError);
@@ -151,11 +153,16 @@ void Backend::step(uint32_t now) {
   for (unsigned d=0; d<Drives; ++d) {
     if (drive_[d].seeking && expired(now,drive_[d].deadline)) {
       drive_[d].seeking=false;
+      // Match the reference worker: sample abort before clearing seek status.
+      // Retain this exact read; USB reporting must not add bus transactions.
+      const uint16_t completion_command=bus_.read(Command);
+      seek_completion_command_[d]=completion_command;
+      seek_completion_valid_|=uint8_t(1U<<d);
       status(d, Seeking|Busy|FirstStatus, false);
       // CLC may have aborted the seek's attention. Read the hardware latch at
       // completion, just as the simulation worker does.
       log(drive_event(d));
-      if (!(bus_.read(Command)&(1U<<(d+2)))) {
+      if (!(completion_command&(1U<<(d+2)))) {
         bus_.write(Attention, uint16_t(1U<<d));
         log(Event::SeekComplete);
       } else log(Event::SeekAborted);

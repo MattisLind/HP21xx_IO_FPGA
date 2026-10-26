@@ -58,7 +58,7 @@ def fetch():
 
 def hashes():
     paths = list(SOURCE.rglob('*')) + list((OUT / 'deps').rglob('*'))
-    paths += [Path(__file__), ROOT/'scripts/stm32.py', ROOT/'firmware/stm32/cmake/arm-toolchain.cmake']
+    paths += [Path(__file__).resolve(), ROOT/'scripts/stm32.py', ROOT/'firmware/stm32/cmake/arm-toolchain.cmake']
     return {str(p.relative_to(ROOT)): digest(p) for p in sorted(paths) if p.is_file()}
 
 

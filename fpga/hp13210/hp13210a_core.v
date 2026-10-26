@@ -93,13 +93,16 @@ localparam [2:0] SEEK_IDLE = 3'd0,
   reg        command_channel_encode_ff;
   reg        irq_ff;
   reg        [1:0] drive_select_register; 
-  reg        [1:0] seek_drive_select_register;
   reg        protected_cylinder_register;
   reg        defective_cylinder_register;
   reg [3:0]  first_status, overrun, drive_unsafe, data_protect, seek_check, not_ready, end_of_cylinder, address_error;
   reg [3:0]  flagged_cylinder, drive_busy, data_error;
   reg any_error;
   reg [3:0]  seeking , seek_aborted ;
+  // OTA changes the selected drive on this same edge. Decode its incoming
+  // word when deciding which pending seek is affected by the new command.
+  wire [1:0] seek_abort_drive = (ioo & csel) ? iob_out[1:0] : drive_select_register;
+  wire seek_abort_is_status = (ioo & csel) ? (iob_out[15:12] == 4'h0) : command_is_status_check;
   reg        [3:0] attention_input_register;
   reg        data_op;
   reg        drv0_sel, drv1_sel, drv2_sel, drv3_sel;
@@ -175,17 +178,42 @@ localparam [2:0] SEEK_IDLE = 3'd0,
   reg        reset_data_channel_encode_ff;
   reg        set_irq_ff;
 
-  localparam reg [3:0] STM32_REG_CSR                     = 4'h0;
-  localparam reg [3:0] STM32_REG_7900_COMMAND_STATUS     = 4'h2;
-  localparam reg [3:0] STM32_REG_7900_DATA               = 4'h4;
-  localparam reg [3:0] STM32_REG_7900_ATTENTION          = 4'h6;
-  localparam reg [3:0] STM32_REG_7900_SET_STATUS         = 4'h8;
-  localparam reg [3:0] STM32_REG_7900_CLEAR_STATUS       = 4'hA;
-  localparam reg [3:0] STM32_REG_7900_SEEK_RECORD        = 4'hC;  
+  localparam [3:0] STM32_REG_CSR                     = 4'h0;
+  localparam [3:0] STM32_REG_7900_COMMAND_STATUS     = 4'h2;
+  localparam [3:0] STM32_REG_7900_DATA               = 4'h4;
+  localparam [3:0] STM32_REG_7900_ATTENTION          = 4'h6;
+  localparam [3:0] STM32_REG_7900_SET_STATUS         = 4'h8;
+  localparam [3:0] STM32_REG_7900_CLEAR_STATUS       = 4'hA;
+  localparam [3:0] STM32_REG_7900_SEEK_RECORD        = 4'hC;
   localparam [3:0] STM32_REG_TEST = 4'hE;
   reg [15:0] test_register;
-  //localparam reg [3:0] STM32_REG_DATA       = 4'hc;
-  //localparam reg [3:0] STM32_REG_IRQ_STATUS = 4'he;
+
+  // Multiplexed address bits may remain on AD after NADV rises while NWE
+  // is already low. Keep the last data-phase sample and commit exactly once
+  // when synchronized NWE rises; never OR/set/clear from transient AD values.
+  reg fsmc_write_active;
+  reg [15:0] fsmc_write_data;
+  reg [3:0] fsmc_write_address;
+  wire fsmc_write_window = !stm32_fsmc_ne && stm32_fsmc_nadv &&
+                           !stm32_fsmc_nwe && stm32_fsmc_noe;
+  wire fsmc_write_commit = fsmc_write_active && stm32_fsmc_nwe;
+
+  always @(posedge clk) begin
+    if (reset || popio) begin
+      fsmc_write_active <= 1'b0;
+      fsmc_write_data <= 16'h0000;
+      fsmc_write_address <= 4'h0;
+    end else begin
+      fsmc_write_active <= fsmc_write_window;
+      if (fsmc_write_window) begin
+        fsmc_write_data <= stm32_fsmc_ad_in;
+        fsmc_write_address <= address_register;
+      end
+    end
+  end
+
+  //localparam [3:0] STM32_REG_DATA       = 4'hc;
+  //localparam [3:0] STM32_REG_IRQ_STATUS = 4'he;
 
   //--------------------------------------------------------------------------
   // Backplane outputs
@@ -229,20 +257,20 @@ localparam [2:0] SEEK_IDLE = 3'd0,
 
     stm32_status_access = stm32_data_access & (address_register == STM32_REG_CSR);
     stm32_read_csr = ~stm32_fsmc_noe & stm32_status_access;
-    stm32_write_csr = ~stm32_fsmc_nwe & stm32_status_access;
+    stm32_write_csr = fsmc_write_commit && fsmc_write_address == STM32_REG_CSR;
 
     stm32_read_csr_negedge = ~stm32_read_csr_registered & stm32_read_csr_delayed;
 
     stm32_7900_command_status_access = stm32_data_access & (address_register == STM32_REG_7900_COMMAND_STATUS);
     stm32_read_7900_command_status = stm32_7900_command_status_access & ~stm32_fsmc_noe;
-    stm32_write_7900_command_status = stm32_7900_command_status_access & ~stm32_fsmc_nwe;
+    stm32_write_7900_command_status = fsmc_write_commit && fsmc_write_address == STM32_REG_7900_COMMAND_STATUS;
     
     stm32_write_7900_command_status_negedge = ~stm32_write_7900_command_status_registered & stm32_write_7900_command_status_delayed;
 
  
     stm32_7900_data_access = stm32_data_access & (address_register == STM32_REG_7900_DATA);
     stm32_read_7900_data = stm32_7900_data_access & ~stm32_fsmc_noe;
-    stm32_write_7900_data = stm32_7900_data_access & ~stm32_fsmc_nwe;
+    stm32_write_7900_data = fsmc_write_commit && fsmc_write_address == STM32_REG_7900_DATA;
 
 
     stm32_write_7900_data_negedge = ~stm32_write_7900_data_registered & stm32_write_7900_data_delayed;
@@ -250,15 +278,15 @@ localparam [2:0] SEEK_IDLE = 3'd0,
 
     stm32_7900_attention_access = stm32_data_access & (address_register == STM32_REG_7900_ATTENTION);
     stm32_read_7900_attention = stm32_7900_attention_access & ~stm32_fsmc_noe;
-    stm32_write_7900_attention = stm32_7900_attention_access & ~stm32_fsmc_nwe;        
+    stm32_write_7900_attention = fsmc_write_commit && fsmc_write_address == STM32_REG_7900_ATTENTION;
 
     stm32_write_7900_attention_negedge = ~stm32_write_7900_attention_registered & stm32_write_7900_attention_delayed;
 
 
     stm32_7900_command_set_status_access = stm32_data_access & (address_register == STM32_REG_7900_SET_STATUS);
     stm32_7900_command_clear_status_access = stm32_data_access & (address_register == STM32_REG_7900_CLEAR_STATUS);
-    stm32_7900_command_set_status = stm32_7900_command_set_status_access & ~stm32_fsmc_nwe;
-    stm32_7900_command_clear_status = stm32_7900_command_clear_status_access & ~stm32_fsmc_nwe;
+    stm32_7900_command_set_status = fsmc_write_commit && fsmc_write_address == STM32_REG_7900_SET_STATUS;
+    stm32_7900_command_clear_status = fsmc_write_commit && fsmc_write_address == STM32_REG_7900_CLEAR_STATUS;
 
     stm32_7900_seek_record_access = stm32_data_access & (address_register == STM32_REG_7900_SEEK_RECORD);
     stm32_read_7900_seek_record = stm32_7900_seek_record_access & ~stm32_fsmc_noe;
@@ -295,9 +323,8 @@ localparam [2:0] SEEK_IDLE = 3'd0,
   // Addresses are the values on AD during NADV, not CPU byte addresses.
   always @(posedge clk) begin
     if (reset) test_register <= 16'h0000;
-    else if (!stm32_fsmc_ne && stm32_fsmc_nadv && !stm32_fsmc_nwe &&
-             stm32_fsmc_noe && address_register == STM32_REG_TEST)
-      test_register <= stm32_fsmc_ad_in;
+    else if (fsmc_write_commit && fsmc_write_address == STM32_REG_TEST)
+      test_register <= fsmc_write_data;
   end
 
   always @(posedge clk) begin
@@ -312,7 +339,6 @@ localparam [2:0] SEEK_IDLE = 3'd0,
       stm32_read_csr_registered <= 0;
       stm32_read_csr_delayed <= 0;
       seeking <= 0;
-      seek_drive_select_register <= 0;
       command_channel_control_ff_delayed <= 0;
       stm32_irq_ff <= 0;
       stm32_data_channel_irq_ff <= 0;
@@ -375,7 +401,11 @@ localparam [2:0] SEEK_IDLE = 3'd0,
          
         // command channel flag buffer flip/flop
         if ((clf & csel) |  (iak & irq_ff)) command_channel_flag_buffer_ff <= 1'b0;
-        else if ((stf & csel) | (~command_channel_flag_ff & stm32_write_7900_attention_negedge) | set_irq_ff) command_channel_flag_buffer_ff <= 1'b1;
+        // SEEK address acceptance requests backend service, not HP completion.
+        // Its flag is raised by the backend's attention write when positioning
+        // finishes. ADDRESS RECORD still completes at the address handshake.
+        else if ((stf & csel) | (~command_channel_flag_ff & stm32_write_7900_attention_negedge) |
+                 (set_irq_ff & ~command_is_seek_record)) command_channel_flag_buffer_ff <= 1'b1;
 
         // command channel flag flip/flop
         if (clf & csel) command_channel_flag_ff <= 1'b0;
@@ -383,11 +413,11 @@ localparam [2:0] SEEK_IDLE = 3'd0,
         
         // command channel control flip/flip
         if (((clc | ioo) & csel) | crs) begin
-          //$display("[%0t]>>13210: CLC or IOO received ,seeking[%d]=%d", $time, drive_select_register, seeking[seek_drive_select_register]);
-          if (seeking[seek_drive_select_register]) begin
-            //$display("[%0t]>>13210: signal aborted seek.", $time);
-            seek_aborted[seek_drive_select_register] <= 1'b1;  
-          end
+          // STATUS may inspect a moving drive without cancelling its seek.
+          // Commands to another drive must also leave that seek running.
+          if (crs) seek_aborted <= seek_aborted | seeking;
+          else if (!seek_abort_is_status && seeking[seek_abort_drive])
+            seek_aborted[seek_abort_drive] <= 1'b1;
           command_channel_control_ff <= 1'b0;
         end
         else if (stc & csel) command_channel_control_ff <= 1'b1;
@@ -399,7 +429,6 @@ localparam [2:0] SEEK_IDLE = 3'd0,
           //$display("[%0t]>>13210: Seek command initiated drive=%d", $time, drive_select_register);
           seeking[drive_select_register] <= 1'b1;
           seek_aborted[drive_select_register] <= 1'b0;
-          seek_drive_select_register <= drive_select_register;
         end
 
         // STM32 interface
@@ -418,8 +447,8 @@ localparam [2:0] SEEK_IDLE = 3'd0,
         else if (stc_data_channel_posedge) data_channel_encode_ff <= 1'b1;
 
         if (stm32_write_csr) begin
-            stm32_irq_enable <= stm32_fsmc_ad_in[8];
-            stm32_data_channel_irq_enable <= stm32_fsmc_ad_in[9];            
+            stm32_irq_enable <= fsmc_write_data[8];
+            stm32_data_channel_irq_enable <= fsmc_write_data[9];
         end
 
         case (seek_state)
@@ -445,10 +474,10 @@ localparam [2:0] SEEK_IDLE = 3'd0,
               if (crs) begin
                 seek_state <= SEEK_IDLE;
               end 
-              else begin
+              else if (!(stc & dsel) && !(clf & dsel)) begin
                 seek_state <= SEEK_GET_NEXT_WORD;  
+                reset_data_channel_encode_ff <= 1'b0;
               end 
-              reset_data_channel_encode_ff <= 1'b0; 
             end 
           SEEK_GET_NEXT_WORD:
             begin
@@ -460,12 +489,17 @@ localparam [2:0] SEEK_IDLE = 3'd0,
                 sector_address <=  data_interface_output_buffer_register[4:0];
                 reset_data_channel_encode_ff <= 1'b1; 
                 set_irq_ff <= 1'b1;
+                // Positioning starts when the final address word is accepted
+                // (13210A manual 3-45), even if backend polling is delayed.
+                if (command_is_seek_record) drive_busy[drive_select_register] <= 1'b1;
                 seek_state <= SEEK_GOT_SECOND_WORD;
               end
             end
           SEEK_GOT_SECOND_WORD:
             begin
-              if (~(clf & dsel)) begin
+              // STC precedes CLF in STC,C. Hold the acknowledgement until
+              // both phases have ended so the later CLF cannot erase it.
+              if (!(stc & dsel) && !(clf & dsel)) begin
                 seek_state <= SEEK_IDLE;
                 set_irq_ff <= 1'b0;
                 reset_data_channel_encode_ff <= 1'b0; 
@@ -477,35 +511,35 @@ localparam [2:0] SEEK_IDLE = 3'd0,
 
 
         if (stm32_7900_command_set_status) begin
-          if (stm32_fsmc_ad_in[0]) data_error[stm32_fsmc_ad_in[15:14]] <= 1'b1;
-          if (stm32_fsmc_ad_in[1]) drive_busy[stm32_fsmc_ad_in[15:14]] <= 1'b1;
-          if (stm32_fsmc_ad_in[2]) flagged_cylinder[stm32_fsmc_ad_in[15:14]] <= 1'b1;
-          if (stm32_fsmc_ad_in[3]) address_error[stm32_fsmc_ad_in[15:14]] <= 1'b1;
-          if (stm32_fsmc_ad_in[4]) end_of_cylinder[stm32_fsmc_ad_in[15:14]] <= 1'b1;
-          if (stm32_fsmc_ad_in[5]) not_ready[stm32_fsmc_ad_in[15:14]] <= 1'b1;
-          if (stm32_fsmc_ad_in[6]) seek_check[stm32_fsmc_ad_in[15:14]] <= 1'b1;
-          if (stm32_fsmc_ad_in[7]) data_protect[stm32_fsmc_ad_in[15:14]] <= 1'b1;
-          if (stm32_fsmc_ad_in[8]) drive_unsafe[stm32_fsmc_ad_in[15:14]] <= 1'b1;
-          if (stm32_fsmc_ad_in[9]) overrun[stm32_fsmc_ad_in[15:14]] <= 1'b1;
-          if (stm32_fsmc_ad_in[10]) first_status[stm32_fsmc_ad_in[15:14]] <= 1'b1; 
-          if (stm32_fsmc_ad_in[11]) seeking[stm32_fsmc_ad_in[15:14]] <= 1'b1;
-          if (stm32_fsmc_ad_in[12]) seek_aborted[stm32_fsmc_ad_in[15:14]] <= 1'b1;
+          if (fsmc_write_data[0]) data_error[fsmc_write_data[15:14]] <= 1'b1;
+          if (fsmc_write_data[1]) drive_busy[fsmc_write_data[15:14]] <= 1'b1;
+          if (fsmc_write_data[2]) flagged_cylinder[fsmc_write_data[15:14]] <= 1'b1;
+          if (fsmc_write_data[3]) address_error[fsmc_write_data[15:14]] <= 1'b1;
+          if (fsmc_write_data[4]) end_of_cylinder[fsmc_write_data[15:14]] <= 1'b1;
+          if (fsmc_write_data[5]) not_ready[fsmc_write_data[15:14]] <= 1'b1;
+          if (fsmc_write_data[6]) seek_check[fsmc_write_data[15:14]] <= 1'b1;
+          if (fsmc_write_data[7]) data_protect[fsmc_write_data[15:14]] <= 1'b1;
+          if (fsmc_write_data[8]) drive_unsafe[fsmc_write_data[15:14]] <= 1'b1;
+          if (fsmc_write_data[9]) overrun[fsmc_write_data[15:14]] <= 1'b1;
+          if (fsmc_write_data[10]) first_status[fsmc_write_data[15:14]] <= 1'b1;
+          if (fsmc_write_data[11]) seeking[fsmc_write_data[15:14]] <= 1'b1;
+          if (fsmc_write_data[12]) seek_aborted[fsmc_write_data[15:14]] <= 1'b1;
         end
 
         if (stm32_7900_command_clear_status) begin
-          if (stm32_fsmc_ad_in[0]) data_error[stm32_fsmc_ad_in[15:14]] <= 1'b0;
-          if (stm32_fsmc_ad_in[1]) drive_busy[stm32_fsmc_ad_in[15:14]] <= 1'b0;
-          if (stm32_fsmc_ad_in[2]) flagged_cylinder[stm32_fsmc_ad_in[15:14]] <= 1'b0;
-          if (stm32_fsmc_ad_in[3]) address_error[stm32_fsmc_ad_in[15:14]] <= 1'b0;
-          if (stm32_fsmc_ad_in[4]) end_of_cylinder[stm32_fsmc_ad_in[15:14]] <= 1'b0;
-          if (stm32_fsmc_ad_in[5]) not_ready[stm32_fsmc_ad_in[15:14]] <= 1'b0;
-          if (stm32_fsmc_ad_in[6]) seek_check[stm32_fsmc_ad_in[15:14]] <= 1'b0;
-          if (stm32_fsmc_ad_in[7]) data_protect[stm32_fsmc_ad_in[15:14]] <= 1'b0;
-          if (stm32_fsmc_ad_in[8]) drive_unsafe[stm32_fsmc_ad_in[15:14]] <= 1'b0;
-          if (stm32_fsmc_ad_in[9]) overrun[stm32_fsmc_ad_in[15:14]] <= 1'b0;
-          if (stm32_fsmc_ad_in[10]) first_status[stm32_fsmc_ad_in[15:14]] <= 1'b0; 
-          if (stm32_fsmc_ad_in[11]) seeking[stm32_fsmc_ad_in[15:14]] <= 1'b0;
-          if (stm32_fsmc_ad_in[12]) seek_aborted[stm32_fsmc_ad_in[15:14]] <= 1'b0;
+          if (fsmc_write_data[0]) data_error[fsmc_write_data[15:14]] <= 1'b0;
+          if (fsmc_write_data[1]) drive_busy[fsmc_write_data[15:14]] <= 1'b0;
+          if (fsmc_write_data[2]) flagged_cylinder[fsmc_write_data[15:14]] <= 1'b0;
+          if (fsmc_write_data[3]) address_error[fsmc_write_data[15:14]] <= 1'b0;
+          if (fsmc_write_data[4]) end_of_cylinder[fsmc_write_data[15:14]] <= 1'b0;
+          if (fsmc_write_data[5]) not_ready[fsmc_write_data[15:14]] <= 1'b0;
+          if (fsmc_write_data[6]) seek_check[fsmc_write_data[15:14]] <= 1'b0;
+          if (fsmc_write_data[7]) data_protect[fsmc_write_data[15:14]] <= 1'b0;
+          if (fsmc_write_data[8]) drive_unsafe[fsmc_write_data[15:14]] <= 1'b0;
+          if (fsmc_write_data[9]) overrun[fsmc_write_data[15:14]] <= 1'b0;
+          if (fsmc_write_data[10]) first_status[fsmc_write_data[15:14]] <= 1'b0;
+          if (fsmc_write_data[11]) seeking[fsmc_write_data[15:14]] <= 1'b0;
+          if (fsmc_write_data[12]) seek_aborted[fsmc_write_data[15:14]] <= 1'b0;
         end
 
         stm32_read_7900_data_registered <= stm32_read_7900_data;
@@ -525,7 +559,7 @@ localparam [2:0] SEEK_IDLE = 3'd0,
             first_status[drive_select_register] <= 1'b0;
         end
         else if (stm32_write_7900_data) begin
-            data_interface_input_buffer_register <= stm32_fsmc_ad_in;
+            data_interface_input_buffer_register <= fsmc_write_data;
         end  
 
         // irq flip/flop
@@ -545,19 +579,19 @@ localparam [2:0] SEEK_IDLE = 3'd0,
         
         if (crs | seek_record_command | status_check_command) attention_input_register[0] <=1'b0;
         //else if (drv0_sel) attention_input_register[0] <=1'b1;
-        else if (stm32_write_7900_attention) attention_input_register[0] <= stm32_fsmc_ad_in[0] | attention_input_register[0];
+        else if (stm32_write_7900_attention) attention_input_register[0] <= fsmc_write_data[0] | attention_input_register[0];
 
         if (crs | seek_record_command | status_check_command) attention_input_register[1] <=1'b0;
         //else if (drv1_sel) attention_input_register[1] <=1'b1;
-        else if (stm32_write_7900_attention) attention_input_register[1] <= stm32_fsmc_ad_in[1] | attention_input_register[1];
+        else if (stm32_write_7900_attention) attention_input_register[1] <= fsmc_write_data[1] | attention_input_register[1];
 
         if (crs | seek_record_command | status_check_command) attention_input_register[2] <=1'b0;
         //else if (drv2_sel) attention_input_register[2] <=1'b1;
-        else if (stm32_write_7900_attention) attention_input_register[2] <= stm32_fsmc_ad_in[2] | attention_input_register[2];
+        else if (stm32_write_7900_attention) attention_input_register[2] <= fsmc_write_data[2] | attention_input_register[2];
 
         if (crs | seek_record_command | status_check_command) attention_input_register[3] <=1'b0;
         //else if (drv3_sel) attention_input_register[3] <=1'b1;
-        else if (stm32_write_7900_attention) attention_input_register[3] <= stm32_fsmc_ad_in[3] | attention_input_register[3];
+        else if (stm32_write_7900_attention) attention_input_register[3] <= fsmc_write_data[3] | attention_input_register[3];
 
         if (dsel & ioo) data_interface_output_buffer_register <= iob_out;
       end

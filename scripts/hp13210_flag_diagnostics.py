@@ -143,11 +143,11 @@ def run_model(words, fault=None, limit=1000):
     return None
 
 
-def abs_image(words):
+def abs_image(words, origin=ORIGIN):
     image = bytearray(32)  # Blank leader, followed by HP count/address/data/checksum.
     for index in range(0, len(words), 64):
         block = words[index:index+64]
-        address = ORIGIN + index
+        address = origin + index
         values = [len(block) << 8, address] + block + [sum(block, address) & 65535]
         for value in values:
             image.extend(value.to_bytes(2, 'big'))

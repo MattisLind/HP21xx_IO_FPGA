@@ -24,20 +24,26 @@ def fingerprint():
 def simulate():
     out = fpga.BUILD / 'sim/hp13210'
     out.mkdir(parents=True, exist_ok=True)
-    variants = [(enabled, 173, 0, 0) for enabled in (0, 1)]
-    variants += [(enabled, 200, phase, 0) for enabled in (0, 1) for phase in (0, 5, 10, 15)]
-    variants += [(1, 200, phase, 1) for phase in (0, 5, 10, 15)]
-    for enabled, pulse, phase, omit_ne in variants:
-        name = 'backend-{}-pulse-{}-phase-{}-omit-ne-{}'.format(enabled, pulse, phase, omit_ne)
+    variants = [(enabled, 173, 0, 0, 0) for enabled in (0, 1)]
+    variants += [(enabled, 200, phase, 0, 0) for enabled in (0, 1) for phase in (0, 5, 10, 15)]
+    variants += [(1, 200, phase, 1, 0) for phase in (0, 5, 10, 15)]
+    variants += [(1, 200, phase, omit_ne, 1) for omit_ne in (0, 1) for phase in (0, 5, 10, 15)]
+    for enabled, pulse, phase, omit_ne, early_write in variants:
+        name = 'backend-{}-pulse-{}-phase-{}-omit-ne-{}-early-write-{}'.format(enabled, pulse, phase, omit_ne, early_write)
         target = out / (name + '.vvp')
         fpga.run([fpga.require_tool('iverilog'), '-g2012', '-Wall', '-s', 'tb_hp13210a',
                   '-Ptb_hp13210a.ENABLE_STM32={}'.format(enabled),
                   '-Ptb_hp13210a.HP_PULSE_NS={}'.format(pulse),
                   '-Ptb_hp13210a.START_PHASE_NS={}'.format(phase),
                   '-Ptb_hp13210a.OMIT_NE={}'.format(omit_ne), '-o', str(target)] +
+                 ['-Ptb_hp13210a.EARLY_WRITE={}'.format(early_write)] +
                  [str(p) for p in SOURCES] + [str(TESTBENCH)],
                  log=out / (name + '-compile.log'))
         fpga.run([fpga.require_tool('vvp'), str(target)], log=out / (name + '-test.log'))
+        # Some older vvp versions return zero even after $fatal.
+        result = (out / (name + '-test.log')).read_text()
+        if 'FATAL:' in result or 'PASS: 50 MHz HP protocol' not in result:
+            raise RuntimeError('Controller simulation did not pass: ' + name)
     fpga.write_json(out / 'success.json', {'completed_utc': fpga.timestamp(),
                     'inputs': fingerprint(), 'testbench_sha256': hashlib.sha256(TESTBENCH.read_bytes()).hexdigest(),
                     'backend_modes': [0, 1], 'variants': variants})

@@ -64,6 +64,11 @@ unverified until storage is mounted and configured.
   raw chip-select, address, write, or read control changes.
 - FSMC address capture is qualified by chip select. The register read mux also
   implements attention readback at address `0x06`.
+- FSMC writes retain the last qualified data/address sample and commit once
+  when synchronized NWE rises. Early NWE assertion may overlap the address
+  phase; address bits must not be ORed into attention or applied as set/clear
+  status masks. CSR, data, attention, status masks, and scratchpad use the
+  same completion rule. Existing read acknowledgements are unchanged.
 - The reference's lower FLG/IRQ outputs remain inactive; its data flag drives
   SRQ and its interrupt latch drives FLGH/IRQH. No interrupt routing was
   silently reassigned during porting.
@@ -81,7 +86,13 @@ for arbitrarily timed multi-bit changes. Data, selection, and strobes must meet
 a bundled-data protocol. The directed tests change signals off clock edges,
 hold HP strobes for 173 ns in the original regression and 200 ns at four clock
 phases in the HP 2100S cases. At 50 MHz, 200 ns spans ten clocks. Four further
-mock-backend cases hold NE permanently active. All fourteen variants pass.
+mock-backend cases hold NE permanently active. Eight additional cases assert
+NWE during the address phase, at four phases with NE controlled or permanently
+active (22 variants total). Exact zero/one-hot attention writes and zero
+set/clear masks detect address-phase contamination. A hardware zero attention
+write originally returned 0x0006; the overlapping-write simulation reproduced
+that failure before the write-completion correction. Hardware verification of
+the corrected bitstream is tracked in HANDOVER.md.
 FSMC address/data setup and hold phases are roughly 180 ns with a 241 ns read
 phase; these settings are not a measured minimum timing specification.
 Real HP data setup/hold, response sampling, receiver/driver

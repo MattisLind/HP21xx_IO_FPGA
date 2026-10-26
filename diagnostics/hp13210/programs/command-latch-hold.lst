@@ -1,0 +1,8 @@
+Address Word   Instruction       Meaning (all numbers octal)
+076000  103100 CLF 0            Disable CPU interrupts
+076001  106715 CLC 15           Clear command-channel control once
+076002  062006 LDA 076006       Load command pattern
+076003  102615 OTA 15           Write command latch; no STC
+076004  102000 HLT 00           Checkpoint only; inspect FPGA command register
+076005  026002 JMP 076002       Repeat until operator stops
+076006  030000 OCT 030000       Seek opcode, drive 0; no seek is started

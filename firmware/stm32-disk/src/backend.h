@@ -60,9 +60,12 @@ class Backend {
   uint16_t request_csr() const { return request_csr_; }
   uint16_t last_command() const { return last_command_; }
   uint16_t last_rar() const { return last_rar_; }
+  uint16_t seek_completion_command(unsigned drive) const { return seek_completion_command_[drive]; }
+  uint8_t seek_completion_valid() const { return seek_completion_valid_; }
   const char *last_error() const { return errors_ ? event_code(last_error_) : "none"; }
   // Initial bring-up thresholds in real microseconds, not simulator nanoseconds.
-  static constexpr uint32_t WordTimeoutUs=100, SeekTimeUs=4000;
+  // Experimental fixed delay; not a measured mechanical drive timing model.
+  static constexpr uint32_t WordTimeoutUs=100, SeekTimeUs=500;
  private:
   enum Mode { Idle, Read, Write, CheckCount, Check } mode_=Idle;
   struct Drive { unsigned cylinder=0; bool seeking=false; uint32_t deadline=0; } drive_[Drives];
@@ -72,6 +75,8 @@ class Backend {
   alignas(4) uint8_t buffer_[BufferBytes] = {};
   uint16_t pending_command_=0, pending_seek_=0;
   uint16_t last_csr_=0, request_csr_=0, last_command_=0, last_rar_=0;
+  uint16_t seek_completion_command_[Drives] = {};
+  uint8_t seek_completion_valid_=0;
   Event last_error_=Event::Boot;
   bool pending_=false, read_wait_=false;
   bool failed_[Drives] = {};

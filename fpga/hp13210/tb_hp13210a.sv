@@ -4,6 +4,7 @@ module tb_hp13210a;
   parameter HP_PULSE_NS = 173;
   parameter START_PHASE_NS = 0;
   parameter OMIT_NE = 0;
+  parameter EARLY_WRITE = 0;
   reg  clk = 0;
   reg  reset = 0;
   reg  crs = 0;
@@ -134,20 +135,24 @@ module tb_hp13210a;
   task hp_read(input bit command_channel, input logic [15:0] expected_value);
     select_channel(command_channel);
     ioi=1; #(HP_PULSE_NS);
-    check(iob_in === expected_value, $sformatf("HP input expected %04x got %04x", expected_value, iob_in));
+    if (iob_in !== expected_value)
+      $display("HP input expected %04x got %04x", expected_value, iob_in);
+    check(iob_in === expected_value, "HP input value mismatch");
     ioi=0; #191;
     check(iob_in === 0, "Unstrobed HP input must be zero");
   endtask
 
-  task address_phase(input logic [15:0] address);
+  task address_phase(input logic [15:0] address, input bit early_write = 0);
     stm32_fsmc_ne=0; stm32_fsmc_nwe=1; stm32_fsmc_noe=1;
     host_oe=1; host_ad=address; #181;
-    stm32_fsmc_nadv=0; #179;
+    stm32_fsmc_nadv=0;
+    if (early_write) stm32_fsmc_nwe=0;
+    #179;
     stm32_fsmc_nadv=1; #183;
   endtask
 
   task backend_write(input logic [15:0] address, input logic [15:0] value);
-    address_phase(address);
+    address_phase(address, EARLY_WRITE);
     host_ad=value; #177;
     stm32_fsmc_nwe=0; #181;
     check(stm32_fsmc_ad === value, "FPGA must not drive during an FSMC write");
@@ -165,10 +170,21 @@ module tb_hp13210a;
     #178; stm32_fsmc_ne=OMIT_NE ? 0 : 1; #183;
   endtask
 
+  task record_command(input logic [3:0] command, input logic [1:0] drive,
+                      input logic [7:0] cylinder, input logic [9:0] head_sector);
+    // Diagnostic order: cylinder first, then command, then head/sector.
+    hp_write(0, {8'h00, cylinder}); pulse(3);
+    hp_write(1, {command, 10'h000, drive});
+    pulse(4); pulse(1); pulse(3);
+    hp_write(0, {6'h00, head_sector}); pulse(3);
+    select_channel(1); pulse(2);
+  endtask
+
   logic [15:0] value;
   integer test_bit;
+  integer seek_drive;
   initial begin
-    #200000;
+    #500000;
     $fatal(1, "Controller test timeout");
   end
 
@@ -269,9 +285,23 @@ module tb_hp13210a;
       backend_write(16'h0004, 16'h1234);
       hp_read(0, 16'h1234);
 
+      backend_write(16'h0006, 16'h0000);
+      backend_read(16'h0006, value);
+      check(value === 0, "Zero attention write must not latch multiplexed address 6");
+      backend_write(16'h0006, 16'h0001);
+      backend_read(16'h0006, value);
+      check(value === 1, "One-hot attention write must set only drive 0");
       backend_write(16'h0006, 16'h0005);
       backend_write(16'h0006, 16'h000a);
       hp_read(1, 16'h000f);
+      // OR/set/clear registers must not consume transient address bits either.
+      backend_write(16'h0008, 16'h0000);
+      check(dut.core.address_error[0] === 0, "Zero SET STATUS must not latch address bit 3");
+      backend_write(16'h0008, 16'h0006);
+      backend_write(16'h000a, 16'h0000);
+      check(dut.core.drive_busy[0] && dut.core.flagged_cylinder[0],
+            "Zero CLEAR STATUS must preserve busy and flagged bits");
+      backend_write(16'h000a, 16'h0006);
       // Set then clear drive-1 not-ready and set data-protect via status masks.
       backend_write(16'h0008, 16'h40a0);
       backend_write(16'h000a, 16'h4020);
@@ -283,6 +313,81 @@ module tb_hp13210a;
       hp_write(0, 16'h0215); pulse(3);
       backend_read(16'h000c, value);
       check(value === 16'h3dd5, "Two-word seek record retains cylinder/head/sector");
+
+      // Address acceptance must not let HP read attention before completion.
+      // Repeat for every drive, including the maximum valid cylinder.
+      for (seek_drive=0; seek_drive<4; seek_drive=seek_drive+1) begin
+        pulse(7);
+        record_command(4'h3, seek_drive[1:0], 8'd202, 10'h317);
+        check(dut.core.drive_busy[seek_drive] === 1,
+              "SEEK busy status starts at address acceptance before backend service");
+        sfs=1; #157;
+        check(skf === 0, "SEEK must keep HP command flag clear until backend completion");
+        sfs=0;
+        backend_read(16'h0000, value);
+        check(value[7] === 1, "SEEK address acceptance still requests backend service");
+        backend_read(16'h0000, value);
+        check(value[7] === 0, "SEEK request is acknowledged by CSR read");
+        backend_read(16'h000c, value);
+        check(value === {1'b0, 8'd202, 2'd3, 5'd23}, "SEEK retains maximum valid address");
+        hp_read(1, 0);
+        backend_write(16'h000a, {seek_drive[1:0], 14'h0802});
+        backend_write(16'h0006, 16'h0001 << seek_drive);
+        select_channel(1); pulse(2); sfs=1; #157;
+        check(skf === 1, "Backend attention write raises HP SEEK completion flag");
+        sfs=0;
+        hp_read(1, 16'h0001 << seek_drive);
+      end
+
+      pulse(7);
+      record_command(4'hb, 0, 8'd37, 10'h102);
+      sfs=1; #157;
+      check(skf === 1, "ADDRESS RECORD still completes at address acceptance");
+      sfs=0;
+      backend_read(16'h0000, value);
+      check(value[7] === 0, "ADDRESS RECORD does not dispatch a SEEK worker");
+
+      pulse(7);
+      record_command(4'h3, 0, 8'd1, 0);
+      backend_read(16'h0000, value);
+      hp_write(1, 16'h0000); pulse(4); pulse(3);
+      backend_read(16'h0002, value);
+      check(value[2] === 0, "STATUS during SEEK must preserve its completion attention");
+
+      pulse(7);
+      record_command(4'h3, 0, 8'd1, 0);
+      backend_read(16'h0000, value);
+      record_command(4'h3, 1, 8'd202, 0);
+      backend_read(16'h0002, value);
+      check(value[5:2] === 0, "Starting another drive must not abort an outstanding seek");
+      pulse(8);
+      backend_read(16'h0002, value);
+      check(value[5:2] === 4'b0011, "CRS aborts attention for all outstanding seeks");
+
+      pulse(7);
+      hp_write(0, 16'd7); pulse(3);
+      hp_write(1, 16'h3000); pulse(1); pulse(3);
+      hp_write(0, 16'h0117);
+      // STC,C has overlapping STC and later CLF phases. Acknowledge only
+      // after CLF, including CPU pulses much wider than the FPGA clock.
+      stc=1; #(HP_PULSE_NS/2);
+      clf=1; #(HP_PULSE_NS/2);
+      stc=0; #(HP_PULSE_NS/2);
+      clf=0; #191; pulse(2);
+      sfs=1; #157;
+      check(skf === 1, "SEEK second-word acknowledgement survives delayed CLF");
+      sfs=0;
+      backend_read(16'h000c, value);
+      check(value === {1'b0, 8'd7, 2'd1, 5'd23}, "Wide STC,C captures each address word once");
+
+      pulse(7);
+      record_command(4'h3, 0, 8'd1, 0);
+      select_channel(1); pulse(4);
+      backend_read(16'h0002, value);
+      check(value[2] === 1, "Explicit CLC marks a pending seek's attention aborted");
+      pulse(2); sfs=1; #157;
+      check(skf === 0, "Aborted seek has no fabricated HP completion flag");
+      sfs=0;
 
       pulse(7);
       backend_read(16'h000e, value);

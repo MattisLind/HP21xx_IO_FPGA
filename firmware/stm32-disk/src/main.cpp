@@ -115,6 +115,12 @@ static void report() {
   append_report("FSMC csr=0x%04X request=0x%04X command=0x%04X rar=0x%04X last_error=%s\r\n",
                 unsigned(backend.last_csr()),unsigned(backend.request_csr()),
                 unsigned(backend.last_command()),unsigned(backend.last_rar()),backend.last_error());
+  append_report("Seek completion valid=0x%X command[0..3]=%04X %04X %04X %04X\r\n",
+                unsigned(backend.seek_completion_valid()),
+                unsigned(backend.seek_completion_command(0)),unsigned(backend.seek_completion_command(1)),
+                unsigned(backend.seek_completion_command(2)),unsigned(backend.seek_completion_command(3)));
+  append_report("Experimental fixed seek delay=%lu us\r\n",
+                static_cast<unsigned long>(hp::Backend::SeekTimeUs));
 }
 
 void setup() {
