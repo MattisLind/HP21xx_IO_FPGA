@@ -117,7 +117,16 @@ localparam [2:0] SEEK_IDLE = 3'd0,
   reg        stm32_status_access;
   reg        stm32_read_csr;
   reg        stm32_write_csr;
-  reg        stm32_irq_ff;
+  // Preserve backend requests independently of later HP STATUS/SEEK words.
+  // CSR acknowledges one entry; COMMAND and RAR then expose that same entry.
+  reg [15:0] request_commands [0:7];
+  reg [15:0] request_addresses [0:7];
+  reg [2:0] request_head, request_tail;
+  reg [3:0] request_count;
+  reg [15:0] captured_command, captured_address;
+  reg captured_request_valid;
+  reg seek_request_delayed, seek_record_read_delayed;
+  wire stm32_irq_ff = (request_count != 0);
   reg        stm32_data_channel_irq_ff;
   reg        stm32_data_channel_irq_enable;
   reg        stm32_7900_command_status_access;
@@ -177,6 +186,11 @@ localparam [2:0] SEEK_IDLE = 3'd0,
   reg [4:0]  sector_address;
   reg        reset_data_channel_encode_ff;
   reg        set_irq_ff;
+  wire backend_request = (command_is_seek_record & set_irq_ff & ~seek_request_delayed) |
+       ((command_is_write_data | command_is_read_data | command_is_refine_sector |
+         command_is_check_data | command_is_initalize_data) & command_channel_control_ff_posedge);
+  wire request_pop = stm32_read_csr_negedge & (request_count != 0);
+  wire request_push = backend_request & ((request_count < 8) | request_pop);
 
   localparam [3:0] STM32_REG_CSR                     = 4'h0;
   localparam [3:0] STM32_REG_7900_COMMAND_STATUS     = 4'h2;
@@ -340,7 +354,14 @@ localparam [2:0] SEEK_IDLE = 3'd0,
       stm32_read_csr_delayed <= 0;
       seeking <= 0;
       command_channel_control_ff_delayed <= 0;
-      stm32_irq_ff <= 0;
+      request_head <= 0;
+      request_tail <= 0;
+      request_count <= 0;
+      captured_command <= 0;
+      captured_address <= 0;
+      captured_request_valid <= 0;
+      seek_request_delayed <= 0;
+      seek_record_read_delayed <= 0;
       stm32_data_channel_irq_ff <= 0;
       data_channel_encode_ff <= 0;
       seek_state <= SEEK_IDLE;
@@ -436,9 +457,29 @@ localparam [2:0] SEEK_IDLE = 3'd0,
         // The IRQ is set on the rising edge of the command channel control signal and reset by reading the status register.
         command_channel_control_ff_delayed <= command_channel_control_ff;
 
-        if (stm32_read_csr_negedge) stm32_irq_ff <= 1'b0;
-        else if (command_is_seek_record & set_irq_ff) stm32_irq_ff <= 1'b1;
-        else if ((command_is_write_data | command_is_read_data | command_is_refine_sector | command_is_check_data | command_is_initalize_data) & command_channel_control_ff_posedge) stm32_irq_ff <= 1'b1;
+        seek_request_delayed <= set_irq_ff;
+        seek_record_read_delayed <= stm32_read_7900_seek_record;
+        if (seek_record_read_delayed && !stm32_read_7900_seek_record)
+          captured_request_valid <= 1'b0;
+        if (request_push) begin
+          request_commands[request_tail] <= {command_register, 2'b00,
+              protected_cylinder_register, defective_cylinder_register,
+              2'b00, seek_aborted, drive_select_register};
+          request_addresses[request_tail] <= {1'b0, cylinder_address, head_address, sector_address};
+          request_tail <= request_tail + 1'b1;
+        end
+        if (request_pop) begin
+          captured_command <= request_commands[request_head];
+          captured_address <= request_addresses[request_head];
+          captured_request_valid <= 1'b1;
+          request_head <= request_head + 1'b1;
+        end
+        case ({request_push, request_pop})
+          2'b10: request_count <= request_count + 1'b1;
+          2'b01: request_count <= request_count - 1'b1;
+          default: ;
+        endcase
+        if (backend_request && !request_push) overrun[drive_select_register] <= 1'b1;
 
         if (stm32_read_7900_data_negedge | stm32_write_7900_data_negedge) stm32_data_channel_irq_ff <= 1'b0;
         else if (stc_data_channel_negedge) stm32_data_channel_irq_ff <= 1'b1;
@@ -608,14 +649,17 @@ localparam [2:0] SEEK_IDLE = 3'd0,
       STM32_REG_CSR:
         stm32_fsmc_ad_out = {8'h00, stm32_irq_ff, stm32_data_channel_irq_ff, 6'h00};
       STM32_REG_7900_COMMAND_STATUS:
-        stm32_fsmc_ad_out = {command_register, 2'b00, protected_cylinder_register,
+        stm32_fsmc_ad_out = captured_request_valid ?
+          {captured_command[15:6], seek_aborted, captured_command[1:0]} :
+          {command_register, 2'b00, protected_cylinder_register,
           defective_cylinder_register, 2'b00, seek_aborted, drive_select_register};
       STM32_REG_7900_DATA:
         stm32_fsmc_ad_out = data_interface_output_buffer_register;
       STM32_REG_7900_ATTENTION:
         stm32_fsmc_ad_out = {12'h000, attention_input_register};
       STM32_REG_7900_SEEK_RECORD:
-        stm32_fsmc_ad_out = {1'b0, cylinder_address, head_address, sector_address};
+        stm32_fsmc_ad_out = captured_request_valid ? captured_address :
+          {1'b0, cylinder_address, head_address, sector_address};
       default: stm32_fsmc_ad_out = 16'h0000;
     endcase
   end

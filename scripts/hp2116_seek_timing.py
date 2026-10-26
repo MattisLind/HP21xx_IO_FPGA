@@ -11,6 +11,8 @@ and step 21 advances to its cylinder-1 seek; this is not a full-diagnostic pass.
 +STOP_AFTER_SEEK_STEPS stops on entry to section 1 step 24, after steps 21-23.
 The initial HLT 74 saves configured.hex. +FAST_MEM=<path> replays that memory
 at the same diagnostic entry with reset peripherals, for fast repeated tests.
++SECTION1_ONLY with FAST_MEM enters the original section-1 routine directly;
+this isolates seek tests from the diagnostic's long console/startup delays.
 """
 from pathlib import Path
 import argparse
@@ -53,10 +55,12 @@ hp13210a #(.RESET_NOT_READY(4'h0)) disk7900 (
     cpu = replace(cpu, "assign scale_clock_enable = (clk_scale == 5'd1);", """
 integer timing_cpu_scale = 1;
 integer timing_requested_scale = 1;
+bit timing_section1_only;
 initial begin
+  timing_section1_only = $test$plusargs("SECTION1_ONLY");
   void'($value$plusargs("CPU_SCALE=%d", timing_requested_scale));
   if (timing_requested_scale < 1 || timing_requested_scale > 31) $fatal(1, "CPU_SCALE must be 1..31");
-  wait (P == 15'o012307 && !run_ff);
+  wait ((P == 15'o012307 || (timing_section1_only && P == 15'o003137)) && !run_ff);
   timing_cpu_scale = timing_requested_scale;
   $display("CPU_SCALE ns=%0d terminal_count=%0d", $time, timing_cpu_scale);
 end
@@ -67,6 +71,7 @@ assign scale_clock_enable = (clk_scale == timing_cpu_scale);
     tb = p.read_text()
     tb = replace(tb, "module tb_hp2116;", """module tb_hp2116;
 integer timing_seek_us = 4000, timing_capture_us = 0, timing_max_ms = 3000;
+bit timing_capture_burst = 0;
 string timing_boot_memory;
 reg [15:0] timing_last_step = 16'hffff;
 reg timing_configured = 0;
@@ -116,6 +121,19 @@ always @(posedge cpu.disk7900.command_channel_flag_ff)
   if (rst_n) $display("CC_FLAG ns=%0d P=%06o attention=%h", $time, cpu.P, cpu.disk7900.attention_input_register);
 """)
     tb = replace(tb, "#(4ms);", "#(timing_seek_us * 1us);")
+    # The production backend initializes busy synchronously before dispatching
+    # another request. Do not leave that write in a forked simulation worker:
+    # it can otherwise execute after a subsequent SEEK CHECK clears busy.
+    tb = replace(tb, "        drive_busy[seek_drive] = 1'b1;", "        // Busy was initialized synchronously by the dispatcher.")
+    tb = replace(tb, "        stm32_fsmc_write16(STM32_REG_7900_SET_STATUS, { seek_drive[1:0], STATUS_DRIVE_BUSY});", "        // Dispatcher has already published busy to the FPGA.")
+    tb = replace(tb, "                drive_busy[selected_drive] = 1'b1;\n\n                fork", """                drive_busy[selected_drive] = 1'b1;
+                stm32_fsmc_write16(STM32_REG_7900_SET_STATUS, { selected_drive[1:0], STATUS_DRIVE_BUSY});
+
+                fork""")
+    tb = replace(tb, "seek_active[selected_drive] = 1'b1;", "seek_active[seek_drive] = 1'b1;")
+    tb = replace(tb, "seek_done[selected_drive] = 1'b0;", "seek_done[seek_drive] = 1'b0;")
+    tb = replace(tb, "        wait (!stm32_irq);", """        // CSR consumes one request. Further queued packets keep IRQ high;
+        // poll again, as the production STM32 backend does.""")
     tb = replace(tb, "initial begin\n    if (!$value$plusargs(\"RTE=%s\", RTE))", """initial begin : timing_uart_config
     string skipped_boot;
     void'($value$plusargs("DSN=%s", DSN));
@@ -130,13 +148,32 @@ always @(posedge cpu.disk7900.command_channel_flag_ff)
     tb = replace(tb, "    // Enable single-cycle mode and do two phase-steps", """    if (timing_boot_memory != "") begin
       sw = 16'o102306; pulse_btn(load_a_btn);
       sw = 16'o001750; pulse_btn(load_b_btn);
-      sw = 16'o012307; pulse_btn(load_addr_btn);
+      if ($test$plusargs("SECTION1_ONLY")) begin
+        if (mem[15'o003137] != 16'o006400) $fatal(1, "Unexpected section-1 entry");
+        sw = 16'o003137;
+      end else sw = 16'o012307;
+      pulse_btn(load_addr_btn);
       sw = 0;
     end
     // Enable single-cycle mode and do two phase-steps""")
     tb = replace(tb, "        stm32_handle_irq();", """        $display("IRQ_SEEN ns=%0d", $time);
-        if (timing_capture_us > 0) #(timing_capture_us * 1us);
+        if (!timing_capture_burst && timing_capture_us > 0) #(timing_capture_us * 1us);
+        timing_capture_burst = 1;
         stm32_handle_irq();""")
+    tb = replace(tb, """      else begin
+        #(500ns);
+      end
+    end
+  end
+
+  // Synchronous memory model""", """      else begin
+        timing_capture_burst = 0;
+        #(500ns);
+      end
+    end
+  end
+
+  // Synchronous memory model""")
     tb = replace(tb, "        command = indata[15:12];", """        $display("CAPTURE ns=%0d command=%04h", $time, indata);
         command = indata[15:12];""")
     tb = replace(tb, "        // seek is done", """        $display("SEEK_DEADLINE ns=%0d drive=%0d", $time, seek_drive);

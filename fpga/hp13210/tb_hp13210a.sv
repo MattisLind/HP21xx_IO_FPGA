@@ -184,7 +184,7 @@ module tb_hp13210a;
   integer test_bit;
   integer seek_drive;
   initial begin
-    #500000;
+    #1000000;
     $fatal(1, "Controller test timeout");
   end
 
@@ -273,11 +273,15 @@ module tb_hp13210a;
       check(value[7] === 1, "Command IRQ pending in CSR");
       backend_read(16'h0000, value);
       check(value[7] === 0, "CSR read acknowledges command IRQ");
+      backend_read(16'h0002, value);
+      backend_read(16'h000c, value);
       backend_write(16'h0000, 16'h0300);
       hp_write(1, 16'h1001); pulse(3);
       check(stm32_irq === 1, "Enabled command interrupt reaches backend");
       backend_read(16'h0000, value);
       check(stm32_irq === 0, "Backend CSR read releases command interrupt");
+      backend_read(16'h0002, value);
+      backend_read(16'h000c, value);
 
       hp_write(0, 16'ha55a);
       backend_read(16'h0004, value);
@@ -363,6 +367,42 @@ module tb_hp13210a;
       pulse(8);
       backend_read(16'h0002, value);
       check(value[5:2] === 4'b0011, "CRS aborts attention for all outstanding seeks");
+
+      pulse(7);
+      // Four drives can request seeks before the MCU polls, and a legal
+      // STATUS command may overwrite the live command register meanwhile.
+      for (seek_drive=0; seek_drive<4; seek_drive=seek_drive+1)
+        record_command(4'h3, seek_drive[1:0], 8'd10+seek_drive,
+                       (seek_drive << 8) | 23);
+      hp_write(1, 16'h0003); pulse(4); pulse(3);
+      for (seek_drive=0; seek_drive<4; seek_drive=seek_drive+1) begin
+        backend_read(16'h0000, value);
+        check(value[7] === 1, "Each queued SEEK remains pending until CSR acknowledgement");
+        backend_read(16'h0002, value);
+        check(value[15:12] === 4'h3 && value[1:0] === seek_drive[1:0],
+              "Queued command survives later STATUS and retains drive order");
+        backend_read(16'h000c, value);
+        check(value == (((10+seek_drive) << 7) | (seek_drive << 5) | 23),
+              "Queued SEEK retains its own address words");
+      end
+      backend_read(16'h0000, value);
+      check(value[7] === 0, "All queued commands consumed exactly once");
+      backend_read(16'h0002, value);
+      check(value[15:12] === 0 && value[1:0] === 3,
+            "After packet consumption, command/status reads return live state");
+
+      pulse(7);
+      for (seek_drive=0; seek_drive<8; seek_drive=seek_drive+1)
+        record_command(4'h3, 0, 8'd10+seek_drive, 0);
+      check(dut.core.request_count === 8, "Request queue holds eight packets");
+      record_command(4'h3, 0, 8'd99, 0);
+      check(dut.core.overrun[0] === 1, "Queue overflow reports overrun without overwriting old packets");
+      for (seek_drive=0; seek_drive<8; seek_drive=seek_drive+1) begin
+        backend_read(16'h0000, value);
+        backend_read(16'h0002, value);
+        backend_read(16'h000c, value);
+        check(value == ((10+seek_drive) << 7), "Queue overflow preserves accepted request order");
+      end
 
       pulse(7);
       hp_write(0, 16'd7); pulse(3);

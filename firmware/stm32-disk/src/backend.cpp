@@ -142,7 +142,7 @@ void Backend::step(uint32_t now) {
     if (pending_) {
       log(drive_event(cmd&3));
       ++errors_; last_error_=Event::PendingError;
-      log(Event::PendingError); // Hardware has only one pending-command latch too.
+      log(Event::PendingError); // The streaming backend has one software pending slot.
       status(cmd&3, Overrun);
     } else {
       pending_command_=cmd;

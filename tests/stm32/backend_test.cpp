@@ -100,6 +100,40 @@ static void startup_seek_tests() {
   assert(f.engine.seek_completion_command(0)==0x3004);
   assert(f.engine.seek_completion_command(1)==0x3001);
 }
+
+static void seek_geometry_tests() {
+  Fixture f;
+  for (unsigned d=0; d<4; ++d) f.images.online[d]=true;
+  f.engine.begin();
+  uint32_t now=0;
+  // Seek must not access sector storage. Exercise each drive and every head,
+  // at both cylinder/sector boundaries, then reject each invalid field.
+  for (unsigned d=0; d<4; ++d) {
+    for (unsigned h=0; h<4; ++h) {
+      for (auto cylinder : {0U, 202U}) for (auto sector : {0U, 23U}) {
+        f.bus.attention=0;
+        f.bus.command(3,d,{cylinder,h,sector}); f.engine.step(now);
+        assert(f.bus.attention==0 && (f.bus.status[d]&hp::Busy));
+        f.engine.step(now+hp::Backend::SeekTimeUs-1);
+        assert(f.bus.attention==0);
+        f.engine.step(now+hp::Backend::SeekTimeUs);
+        assert(f.bus.attention==(1U<<d));
+        assert(!(f.bus.status[d]&(hp::Busy|hp::Seeking|hp::SeekCheck)));
+        now+=hp::Backend::SeekTimeUs+10;
+      }
+    }
+    for (auto address : {hp::Address{203,0,0}, hp::Address{255,0,0},
+                         hp::Address{0,0,24}, hp::Address{0,0,31}}) {
+      f.bus.attention=0;
+      f.bus.command(3,d,address); f.engine.step(now);
+      assert(f.bus.status[d]&hp::SeekCheck);
+      assert(!(f.bus.status[d]&hp::Busy));
+      assert(f.bus.attention==(1U<<d));
+      now+=hp::Backend::SeekTimeUs+10;
+    }
+  }
+  assert(f.images.reads==0 && f.images.writes==0);
+}
 static void read_tests() {
   Fixture f;
   f.images.bytes[0][0]=0x34; f.images.bytes[0][1]=0x12;
@@ -301,7 +335,7 @@ static void unsupported_command_tests() {
 }
 int main() {
   static_assert(hp::ImageBytes==4988928);
-  config_tests(); startup_seek_tests(); read_tests(); write_tests();
+  config_tests(); startup_seek_tests(); seek_geometry_tests(); read_tests(); write_tests();
   end_cylinder_and_errors(); pending_and_check_tests();
   reset_and_boundary_tests();
   trace_tests();

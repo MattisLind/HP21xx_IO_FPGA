@@ -109,13 +109,13 @@ Only the low four AD address bits are decoded; higher addresses alias.
 
 | Address | Read | Write |
 | --- | --- | --- |
-| `0x00` | CSR: command IRQ bit 7, data IRQ bit 6; end of read acknowledges command IRQ | Command IRQ enable bit 8, data IRQ enable bit 9 |
-| `0x02` | Command in bits 15:12, protected/defective cylinder in 9:8, seek-aborted mask in 5:2, drive in 1:0 | No state change in this reference revision |
+| `0x00` | CSR: command IRQ bit 7, data IRQ bit 6; end of read consumes one queued command if bit 7 was set | Command IRQ enable bit 8, data IRQ enable bit 9 |
+| `0x02` | Command in bits 15:12, protected/defective cylinder in 9:8, live seek-aborted mask in 5:2, drive in 1:0; after CSR consumption, command fields belong to that packet | No state change |
 | `0x04` | HP-to-drive word; end of read acknowledges data IRQ and advances handshake | Drive-to-HP word and data handshake |
 | `0x06` | Four-bit attention mask | OR bits 3:0 into attention; triggers reference command-flag handshake |
 | `0x08` | Zero | Set selected drive status bits |
 | `0x0A` | Zero | Clear selected drive status bits |
-| `0x0C` | `{0, cylinder[7:0], head[1:0], sector[4:0]}` | No operation |
+| `0x0C` | `{0, cylinder[7:0], head[1:0], sector[4:0]}`; reading the captured address releases the packet snapshot | No operation |
 | `0x0E` | 16-bit transport-test scratchpad | Replace all 16 bits; no disk side effects |
 
 The scratchpad resets to zero on FPGA reset and survives HP POPIO. Directed
@@ -128,6 +128,21 @@ seek-check, not-ready, end-of-cylinder, address-error, flagged-cylinder,
 drive-busy, data-error. The HP status word uses the reference's distinct bit
 layout; it is not the status-write mask. Firmware interrupts still need their
 enables written explicitly.
+
+SEEK address acceptance acknowledges the data channel, marks the drive busy,
+and queues backend service. It does not raise the HP command flag. The backend
+attention write raises that flag at completion. ADDRESS RECORD retains immediate
+completion. STATUS does not abort a seek, commands select their own drive for
+abort handling, and CRS aborts attention for all outstanding drives.
+
+Eight command/RAR packets are retained in order, so later STATUS or SEEK words
+cannot replace a pending backend request. Read CSR, then COMMAND, then RAR for
+each packet; the existing STM32 backend already follows this sequence. Until
+RAR is read, COMMAND/RAR expose that packet; subsequent reads expose live state.
+The abort mask always remains live. Queue overflow sets the selected drive's
+overrun status and preserves the eight accepted packets. IRQ remains asserted
+while more packets await CSR consumption; consumers must drain it, not wait for
+it to fall after consuming only one packet.
 
 ## Verification and build
 
