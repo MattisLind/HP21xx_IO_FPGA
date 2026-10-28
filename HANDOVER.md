@@ -6,6 +6,36 @@ bring-up state; some older README status paragraphs describe earlier stages.
 
 ## Current hardware and capture — 2026-10-28
 
+### CHECK flag fix installed — awaiting hardware retest
+
+User explicitly requested installation. Production core now suppresses the
+STM32 DATA-read contribution to HP data flag for CHECK only. Permanent test
+fails on old RTL, passes across22 controller variants; READ/WRITE/INIT still
+request DMA, CHECK CSR6 clears, command completion retained. Board/LED tests
+and22 Python tests pass. ISE board build meets50MHz; min period7.543ns.
+
+Loaded new FPGA into volatile SRAM via JTAG, ST-Link-halted STM32 throughout.
+Bitstream SHA256afa0fd01df93adc300c882faa7c80f40d295ceb402de64f3847f0b42c6f9a80c;
+core a117015b0ba9dcd366541fd4e0b9b59ae6db060f2d1afabb476e2fdae1021300.
+SPI flash untouched. Previous f9d066... image/receipt saved in
+build/check-step34/install/previous-fpga/. Physical scratch/attention readbacks
+PASS, then reloaded same new bitstream to clear test attention. Existing STM32
+49ae577... ELF verified48500bytes via SWD, reset/run after FPGA installation;
+STM32 flash was NOT rewritten. Fresh USB FAT/all4READY, commands/errors0,
+CSR0000, data-start100us/response20us. Both captures still PID8619, HP2400/7E2.
+
+IMPORTANT limitation: full CPU run with new RTL does NOT pass step34. It now
+prints E13 0000 WORDS TRANSFERRED0128 EXPECTED rather than one unwanted word.
+The phantom transfer is removed, but remaining DMA/completion behavior needs
+investigation. Do not claim full step34/diagnostic acceptance. User explicitly
+told this before installation. Next physical run from P002000/S000000 will
+determine actual result. No HP inputs or panel actions during installation.
+
+Receipt build/check-step34/install/installed.json records sources/log hashes,
+JTAG load, FSMC checks, STM verification, fresh status and CPU limitation.
+Aggregate build/hardware-update-20261028.json updated; prior snapshot saved.
+See diagnostics/hp13210/check-data.md. Hardware test pending.
+
 ### Current response/startup timing revision — installed and verified
 
 User confirmed HP halted. Reloaded unchanged FPGA f9d066... into volatile SRAM

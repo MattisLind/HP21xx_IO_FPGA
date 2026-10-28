@@ -310,7 +310,12 @@ localparam [2:0] SEEK_IDLE = 3'd0,
 
     stm32_drq = 1'b0;
 
-    set_data_channel_flag_buffer =   reset_data_channel_encode_ff | stm32_write_7900_data_negedge | stm32_read_7900_data_negedge | ((command_register == 4'b0000) & ~command_channel_control_ff_delayed & command_channel_control_ff);
+    // CHECK accepts a sector count, then runs without HP data transfers.
+    // Reading that count still acknowledges CSR6, but must not request DMA.
+    set_data_channel_flag_buffer = reset_data_channel_encode_ff |
+      stm32_write_7900_data_negedge |
+      (stm32_read_7900_data_negedge & ~command_is_check_data) |
+      ((command_register == 4'b0000) & ~command_channel_control_ff_delayed & command_channel_control_ff);
     stc_data_channel = stc & dsel;
     stc_data_channel_negedge = ~stc_data_channel & stc_data_channel_delayed;
     stc_data_channel_posedge = stc_data_channel & ~stc_data_channel_delayed;  

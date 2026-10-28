@@ -183,6 +183,7 @@ module tb_hp13210a;
   logic [15:0] value;
   integer test_bit;
   integer seek_drive;
+  reg [3:0] test_command;
   initial begin
     #1000000;
     $fatal(1, "Controller test timeout");
@@ -442,6 +443,47 @@ module tb_hp13210a;
       check(value === 16'hzzzz, "Disabled backend never drives AD");
       check(stm32_irq === 0, "Disabled backend cannot enable IRQs");
       hp_read(0, 16'h0040);
+    end
+
+    if (ENABLE_STM32) begin
+      // CHECK consumes one sector-count word without starting a disk-data
+      // stream. Its acknowledgement must release CSR6 without requesting DMA.
+      // READ staging and WRITE/INITIALIZE consumption must still request it.
+      for (test_bit=0; test_bit<4; test_bit=test_bit+1) begin
+        case (test_bit)
+          0: test_command=4'h1;
+          1: test_command=4'h2;
+          2: test_command=4'h6;
+          3: test_command=4'h9;
+        endcase
+        reset=1; #199; reset=0; #211;
+        backend_write(16'h0000,16'h0100);
+        select_channel(0); pulse(1);
+        hp_write(0,16'd50); pulse(3); pulse(1);
+        hp_write(1,{test_command,12'h000}); pulse(4); pulse(1); pulse(3);
+        backend_read(16'h0000,value);
+        check(value[7:6]===2'b11,"Command and data request captured");
+        backend_read(16'h0002,value);
+        check(value[15:12]===test_command,"Transfer command retained");
+        backend_read(16'h000c,value);
+        select_channel(0); pulse(1); pulse(2);
+        check(srq===0,"Data request clear before backend acknowledgement");
+        if (test_command==4'h2) backend_write(16'h0004,16'h1234);
+        else begin
+          backend_read(16'h0004,value);
+          check(value===16'd50,"Output/count word reaches backend");
+        end
+        select_channel(0); pulse(2);
+        if (test_command==4'h6)
+          check(srq===0,"CHECK count acknowledgement must not request DMA");
+        else check(srq===1,"READ/WRITE/INITIALIZE still request next DMA word");
+        backend_read(16'h0000,value);
+        check(value[6]===0,"Backend data acknowledgement releases CSR6");
+        backend_write(16'h0006,16'h0000);
+        select_channel(1); pulse(2); sfs=1; #157;
+        check(skf===1,"Command completion flag preserved after data acknowledgement");
+        sfs=0;
+      end
     end
 
     reset=1; #199; reset=0; #211;

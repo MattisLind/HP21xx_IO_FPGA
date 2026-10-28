@@ -1,5 +1,8 @@
 # HP 13210 flag bring-up
 
+The [CHECK count acknowledgement fix](check-data.md) prevents an unwanted DMA
+request after the sector-count word, addressing the physical step34 E13.
+
 The [disk transfer timing experiment](transfer-timing.md) examines the normal
 DMA and intentional-overrun paths after the physical step26 timing regression.
 
