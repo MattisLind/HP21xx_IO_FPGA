@@ -230,11 +230,24 @@ There are no FAT or USB calls during individual word handshakes. This avoids
 per-sector SD latency within a transfer, but initial read latency and final
 write latency still depend on the card. Image geometry/ranges are checked.
 
-The first write word and CHECK count have a **100 microsecond setup timeout**.
-Subsequent WRITE words and READ acknowledgements use a **6 microsecond response
-deadline**, the manual's 5.9 us maximum rounded to the firmware clock. Time is
-sampled after FSMC accesses so their latency does not reduce the next response
-budget. The manual's 156,250 words/s rate gives a **6.4 us disk word period**.
+READ, WRITE and INITIALIZE wait **100 microseconds before the first disk data
+transfer**, after command capture and any synchronous image read. This is an
+emulation startup guard, not measured rotational latency: an immediate two-word
+WRITE can finish before DSN151302 observes the DMA count change, sending its
+intentional-overrun test into a long fallback wait. CHECK and independent seeks
+do not use this delay. The first write word and CHECK count have a separate
+**100 microsecond setup timeout**.
+
+Subsequent WRITE words and READ acknowledgements use a **20 microsecond
+software response wait**. The manual's 5.9 us limit is measured from the data
+channel flag; CSR polling and interrupt delays do not provide that timestamp.
+The earlier six-us wait truncated normal transfers under a polling stall.
+An already-pending CSR word is accepted before checking the deadline. Only an
+expired poll with no pending word closes the valid prefix; subsequent late
+words are discarded. A long interrupt can therefore obscure a late arrival;
+this remains a best-effort polling model, not exact edge timing. Time is sampled
+after FSMC accesses so their latency does not reduce the next response budget.
+The manual's 156,250 words/s rate gives a **6.4 us disk word period**.
 After an interword timeout, the controller remains busy for the remaining words
 of the current sector at that rate. During this closing interval late STCs are
 acknowledged and discarded, Overrun is set, and no late word reaches the image.
@@ -245,8 +258,11 @@ blocking media I/O. READ uses the same closing interval without staging more
 data. Normal full-cylinder termination retains EOC instead of treating the
 continuation request as an overrun.
 
-This is a polling timing model with microsecond resolution, not an FPGA
-timestamp of each HP edge. Interrupt/service latency still matters on hardware.
+USB status reports the maximum observed READ/WRITE response waits to guide the
+next physical test; these are poll timestamps, not HP edge measurements. The
+[CPU transfer experiment](../../diagnostics/hp13210/transfer-timing.md) records
+the timing controls, normal DMA checks and deliberate-overrun tests. Hardware
+acceptance of the 100/20-us adjustment is pending.
 `OV` records an emulated overrun status condition, without adding an E-code or
 backend fault count. The backend retains one pending command; a further
 command arriving before it is serviced reports pending-command overrun.

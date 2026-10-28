@@ -1,5 +1,8 @@
 # HP 13210 flag bring-up
 
+The [disk transfer timing experiment](transfer-timing.md) examines the normal
+DMA and intentional-overrun paths after the physical step26 timing regression.
+
 The [SEEK correction and validation](seek-validation.md) describes the current
 production RTL, its request queue, and the diagnostic seek regression coverage.
 

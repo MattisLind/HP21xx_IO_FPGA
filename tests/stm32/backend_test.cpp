@@ -58,7 +58,12 @@ struct Images : hp::Images {
     memcpy(bytes[d].data()+off,p,size); return true;
   }
 };
-struct Fixture { Bus bus; Images images; hp::Trace trace; hp::Backend engine{bus,images,&trace}; Fixture(){ engine.begin(); } };
+// Most protocol tests start immediately to isolate word handling. Separate
+// startup tests below exercise the production delay and its timer rollover.
+struct Fixture {
+  Bus bus; Images images; hp::Trace trace; hp::Backend engine;
+  explicit Fixture(uint32_t start_us=0):engine(bus,images,&trace,start_us){ engine.begin(); }
+};
 
 static std::vector<std::string> take_trace(hp::Trace &trace) {
   std::vector<std::string> codes;
@@ -240,14 +245,15 @@ static void late_word_tests() {
   assert(read.bus.output.size()==staged && read.images.writes==0);
 }
 static void response_boundary_tests() {
-  // A first-word setup wait is not the interword deadline. Five-us gaps
-  // remain valid; a word at the rounded six-us deadline is already late.
+  // A first-word setup wait is not the interword deadline. An EMPTY expired
+  // poll establishes the cutoff; a subsequent word must be discarded.
   for (unsigned command : {1U,9U}) {
     Fixture f;
     f.bus.command(command,0,{0,0,0}); f.engine.step(0);
     f.bus.input(0x1234); f.engine.step(50);
     f.bus.input(0x5678); f.engine.step(55);
-    f.bus.input(0xbeef); f.engine.step(61);
+    f.engine.step(55+hp::Backend::ResponseTimeoutUs);
+    f.bus.input(0xbeef); f.engine.step(56+hp::Backend::ResponseTimeoutUs);
     assert(f.bus.status[0]&hp::Overrun);
     assert(f.engine.active() && f.bus.attention_writes.empty());
     f.engine.step(2000);
@@ -264,7 +270,7 @@ static void response_boundary_tests() {
     const uint32_t last=now-5;
     f.engine.step(last+5);
     assert(f.engine.active() && f.bus.attention==0);
-    f.engine.step(last+6);
+    f.engine.step(last+hp::Backend::ResponseTimeoutUs);
     if (words%128) assert(f.engine.active() && f.bus.attention==0);
     f.engine.step(last+1000);
     assert(!f.engine.active() && !(f.bus.status[0]&hp::Overrun));
@@ -286,6 +292,81 @@ static void response_boundary_tests() {
   read.engine.step(2000);
   assert(!read.engine.active() && !(read.bus.status[0]&hp::Overrun));
   assert(read.bus.output.size()==31 && read.bus.attention==1);
+}
+static void transfer_start_and_service_tests() {
+  // Defaults used by the real board: do not acknowledge a preloaded WRITE
+  // or stage READ data before the independent initial disk delay has elapsed.
+  for (uint32_t start : {0U,0xffffffc0U}) for (unsigned cmd : {1U,2U,9U}) {
+    Bus bus; Images images; hp::Backend engine(bus,images); engine.begin();
+    bus.command(cmd,0,{0,0,0}); engine.step(start);
+    if (cmd!=2) bus.input(0x1234);
+    for (unsigned t=1;t<hp::Backend::TransferStartUs;++t) {
+      engine.step(start+t);
+      assert(bus.consumed==0 && bus.output.empty() && bus.attention_writes.empty());
+      assert(engine.active() && (bus.status[0]&hp::Busy));
+    }
+    engine.step(start+hp::Backend::TransferStartUs);
+    assert(cmd==2 ? bus.output.size()==1 : bus.consumed==1);
+    engine.step(start+2000);
+    assert(!engine.active() && !(bus.status[0]&hp::Overrun));
+    assert(bus.attention_writes==std::vector<uint16_t>{uint16_t(cmd==9 ? 0 : 1)});
+  }
+  // Pending CSR is untimestamped. A delayed poll cannot prove this word late;
+  // accept it, unlike the old deadline-first code. Test both directions and
+  // both a normal 12us service gap and a poll delayed beyond the 20us budget.
+  for (unsigned gap : {12U,25U}) {
+    Fixture w;
+    w.bus.command(1,0,{0,0,0}); w.engine.step(0);
+    w.bus.input(0x1234); w.engine.step(1);
+    w.bus.input(0x5678); w.engine.step(1+gap);
+    w.engine.step(2000);
+    assert(!(w.bus.status[0]&hp::Overrun));
+    assert(w.images.bytes[0][2]==0x78 && w.bus.consumed==2);
+    assert(w.engine.longest_write_response_us()==gap);
+    Fixture r;
+    r.bus.command(2,0,{0,0,0}); r.engine.step(0); r.engine.step(1);
+    r.bus.csr|=0x40; r.engine.step(1+gap);
+    r.engine.step(2000);
+    assert(!(r.bus.status[0]&hp::Overrun));
+    assert(r.bus.output.size()==2 && r.engine.longest_read_response_us()==gap);
+  }
+}
+static void jittered_transfer_tests() {
+  // Replay a range wider than measured CPU-model responses through the actual
+  // C++ backend, polling between words. This checks data, not just flags.
+  const unsigned gaps[]={3,6,12,19};
+  for (unsigned count : {2U,30U,127U,128U,129U,512U}) {
+    Fixture w(hp::Backend::TransferStartUs);
+    w.bus.command(1,0,{0,0,0}); w.engine.step(0);
+    uint32_t now=hp::Backend::TransferStartUs;
+    for (unsigned i=0;i<count;++i) {
+      const unsigned gap=gaps[i%4];
+      for (unsigned j=1;j<gap;++j) w.engine.step(now+j);
+      now+=gap; w.bus.input(uint16_t(0x8000+i)); w.engine.step(now);
+    }
+    w.engine.step(now+2000);
+    assert(!(w.bus.status[0]&hp::Overrun) && w.bus.consumed==count);
+    assert(w.engine.longest_write_response_us()==(count==2 ? 6 : 19));
+    for (unsigned i=0;i<count;++i) {
+      assert(w.images.bytes[0][i*2]==uint8_t(i));
+      assert(w.images.bytes[0][i*2+1]==uint8_t((0x8000+i)>>8));
+    }
+    for (unsigned i=count*2;i<w.images.written;++i) assert(w.images.bytes[0][i]==0);
+    assert(w.images.bytes[0][w.images.written]==0x5a);
+    Fixture r(hp::Backend::TransferStartUs);
+    r.images.bytes[0]=w.images.bytes[0];
+    r.bus.command(2,0,{0,0,0}); r.engine.step(0);
+    now=hp::Backend::TransferStartUs; r.engine.step(now);
+    for (unsigned i=0;i<count;++i) {
+      assert(r.bus.output[i]==uint16_t(0x8000+i));
+      const unsigned gap=gaps[i%4];
+      for (unsigned j=1;j<gap;++j) r.engine.step(now+j);
+      now+=gap; r.bus.csr|=0x40; r.engine.step(now);
+    }
+    r.engine.step(now+2000);
+    assert(!(r.bus.status[0]&hp::Overrun) && r.bus.output.size()==count+1);
+    assert(r.engine.longest_read_response_us()==(count==2 ? 6 : 19));
+  }
 }
 static void end_cylinder_and_errors() {
   Fixture f;
@@ -493,7 +574,7 @@ static void unsupported_command_tests() {
 }
 int main() {
   static_assert(hp::ImageBytes==4988928);
-  config_tests(); late_word_tests(); response_boundary_tests(); startup_seek_tests(); seek_geometry_tests(); seek_busy_recovery_tests(); read_tests(); write_tests();
+  config_tests(); late_word_tests(); response_boundary_tests(); transfer_start_and_service_tests(); jittered_transfer_tests(); startup_seek_tests(); seek_geometry_tests(); seek_busy_recovery_tests(); read_tests(); write_tests();
   end_cylinder_and_errors(); check_data_tests(); pending_and_check_tests();
   reset_and_boundary_tests();
   trace_tests();

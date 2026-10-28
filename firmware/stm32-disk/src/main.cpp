@@ -122,8 +122,12 @@ static void report() {
                 unsigned(backend.seek_completion_command(2)),unsigned(backend.seek_completion_command(3)));
   append_report("Experimental fixed seek delay=%lu us\r\n",
                 static_cast<unsigned long>(hp::Backend::SeekTimeUs));
-  append_report("DMA response timeout=%lu us; disk word period=6.4 us; sector-end overrun checks enabled\r\n",
+  append_report("Disk data start=%lu us; DMA response wait=%lu us; disk word period=6.4 us\r\n",
+                static_cast<unsigned long>(hp::Backend::TransferStartUs),
                 static_cast<unsigned long>(hp::Backend::ResponseTimeoutUs));
+  append_report("Observed response maxima READ=%lu WRITE=%lu us (poll times, not HP edge timestamps)\r\n",
+                static_cast<unsigned long>(backend.longest_read_response_us()),
+                static_cast<unsigned long>(backend.longest_write_response_us()));
 }
 
 void setup() {

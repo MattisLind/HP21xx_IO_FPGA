@@ -49,7 +49,9 @@ struct Images {
 // One step per main-loop iteration; no allocation, USB output, or delay calls.
 class Backend {
  public:
-  Backend(Bus &bus, Images &images, Trace *trace=nullptr): bus_(bus), images_(images), trace_(trace) {}
+  Backend(Bus &bus, Images &images, Trace *trace=nullptr,
+          uint32_t transfer_start_us=TransferStartUs):
+    bus_(bus), images_(images), trace_(trace), transfer_start_us_(transfer_start_us) {}
   void begin();
   void step(uint32_t now_us);
   bool active() const {
@@ -66,18 +68,23 @@ class Backend {
   uint16_t seek_completion_command(unsigned drive) const { return seek_completion_command_[drive]; }
   uint8_t seek_completion_valid() const { return seek_completion_valid_; }
   const char *last_error() const { return errors_ ? event_code(last_error_) : "none"; }
+  uint32_t longest_read_response_us() const { return longest_read_response_us_; }
+  uint32_t longest_write_response_us() const { return longest_write_response_us_; }
   // Initial bring-up thresholds in real microseconds, not simulator nanoseconds.
   // Experimental fixed delay; not a measured mechanical drive timing model.
   static constexpr uint32_t WordTimeoutUs=100, SeekTimeUs=500;
-  // Manual 3-61: 5.9us response; rounded to the microsecond clock. Table1-1:
-  // 156250 words/s = 6.4us/word. Setup/count waits remain independent.
-  static constexpr uint32_t ResponseTimeoutUs=6;
+  // Software-observed waits, not the manual's 5.9us edge-to-edge limit.
+  // Delay first disk data so a short DMA cannot finish before the diagnostic
+  // observes its word count change. Leave margin for polling/interrupt service
+  // while still rejecting the diagnostic's ~50us deliberately late word.
+  static constexpr uint32_t TransferStartUs=100, ResponseTimeoutUs=20;
  private:
-  enum Mode { Idle, Read, Write, CheckCount, ReadDrain, WriteDrain } mode_=Idle;
+  enum Mode { Idle, ReadStart, WriteStart, Read, Write, CheckCount, ReadDrain, WriteDrain } mode_=Idle;
   struct Drive { unsigned cylinder=0; bool seeking=false; uint32_t deadline=0; } drive_[Drives];
   Bus &bus_;
   Images &images_;
   Trace *trace_;
+  const uint32_t transfer_start_us_;
   alignas(4) uint8_t buffer_[BufferBytes] = {};
   uint16_t pending_command_=0, pending_seek_=0;
   uint16_t last_csr_=0, request_csr_=0, last_command_=0, last_rar_=0;
@@ -90,6 +97,7 @@ class Backend {
   unsigned selected_=0, command_=0, position_=0, length_=0;
   Address address_;
   uint32_t deadline_=0, refresh_=0, commands_=0, errors_=0;
+  uint32_t longest_read_response_us_=0, longest_write_response_us_=0;
   void status(unsigned drive, uint16_t bits, bool set=true);
   void complete(bool attention_bit=true);
   void finish_write(bool check_overrun=true);

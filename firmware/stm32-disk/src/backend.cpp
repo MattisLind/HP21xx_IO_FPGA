@@ -158,13 +158,15 @@ void Backend::dispatch(uint16_t cmd, uint16_t seek, uint32_t now) {
     if (!images_.read(selected_, address_.offset(), buffer_, length_)) {
       media_error(Event::ReadError); return;
     }
-    mode_=Read;
+    mode_=ReadStart;
+    deadline_=bus_.now_us(now)+transfer_start_us_;
   } else if (command_==6) {
     mode_=CheckCount;
   } else {
     // INITIALIZE DATA shares the write data path. Cylinder attribute metadata
     // and write-protect enforcement are intentionally deferred.
-    mode_=Write;
+    mode_=WriteStart;
+    deadline_=bus_.now_us(now)+transfer_start_us_;
   }
 }
 uint16_t Backend::poll() {
@@ -232,16 +234,28 @@ void Backend::step(uint32_t now) {
     drain(now,csr);
     return;
   }
+  if (mode_==ReadStart || mode_==WriteStart) {
+    if (!expired(now,deadline_)) return;
+    mode_=mode_==ReadStart ? Read : Write;
+    deadline_+=WordTimeoutUs;
+  }
   if (mode_==Write) {
-    if (position_ && expired(now,deadline_)) {
-      start_drain(true);
-      drain(now,csr);
-    } else if (csr&0x40) {
+    // CSR is a level latch, with no arrival timestamp. A pending word may
+    // have arrived on time while this poll was delayed by an interrupt.
+    // Only an expired EMPTY poll establishes the end of the valid prefix.
+    if (csr&0x40) {
+      if (position_) {
+        const uint32_t elapsed=now-(deadline_-ResponseTimeoutUs);
+        if (elapsed>longest_write_response_us_) longest_write_response_us_=elapsed;
+      }
       const uint16_t word=bus_.read(Data);
       buffer_[position_++]=uint8_t(word);
       buffer_[position_++]=uint8_t(word>>8);
       deadline_=bus_.now_us(now)+ResponseTimeoutUs;
       if (position_==length_) { mark(Event::EndCylinder); status(selected_,EndCylinder); finish_write(false); }
+    } else if (position_ && expired(now,deadline_)) {
+      start_drain(true);
+      drain(now,csr);
     } else if (expired(now,deadline_)) { mark(Event::Timeout); finish_write(); }
     return;
   }
@@ -265,14 +279,15 @@ void Backend::step(uint32_t now) {
   }
   // READ DATA: stage a word, then await the HP's next STC.
   if (read_wait_) {
-    if (expired(now,deadline_)) {
-      start_drain(false);
-      drain(now,csr);
-      return;
-    }
     if (!(csr&0x40)) {
+      if (expired(now,deadline_)) {
+        start_drain(false);
+        drain(now,csr);
+      }
       return;
     }
+    const uint32_t elapsed=now-(deadline_-ResponseTimeoutUs);
+    if (elapsed>longest_read_response_us_) longest_read_response_us_=elapsed;
     read_wait_=false;
     if (position_==length_) {
       mark(Event::EndCylinder); status(selected_,EndCylinder);

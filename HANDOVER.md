@@ -6,7 +6,165 @@ bring-up state; some older README status paragraphs describe earlier stages.
 
 ## Current hardware and capture — 2026-10-28
 
-### Current firmware: sector-closing overrun correction installed
+### Current response/startup timing revision — installed and verified
+
+User confirmed HP halted. Reloaded unchanged FPGA f9d066... into volatile SRAM
+with STM32 halted, then backed up/verified512KiB old STM32 flash and programmed,
+verified/reset new49ae577... ELF. Backup:
+build/stm32-disk/backups/before-disk-backend-20261028T171843073236Z.bin.
+Fresh USB status confirms100us data start/20us response wait, all4READY,
+FAT mounted, commands/errors/dropped0, CSR0000, observed response maxima0.
+Capture PID8619 still owns HP /dev/ttyUSB4 at2400/7E2 and STM32 /dev/ttyACM0;
+USB reconnected automatically, no ACL repair needed. No HP input sent during
+update. SPI flash untouched. Already configured: normal restart P002000/S0.
+P100/S14 is the separate I/O configuration entry, not the normal restart.
+Physical run now reaches step34; full diagnostic acceptance remains pending.
+
+NEWEST result after proper P2000/S0 restart: fresh H0 banner and normal backend
+activity. Passed earlier failing READ26 and intentional WRITE-overrun32, then
+step33 EOC write. Halt reported A13/B4/code102001. Exact console H22 CYCLIC
+CHECK IN STEP34; E13 0001 WORDS TRANSFERRED 0128 EXPECTED;
+H51 CYL0000 HEAD01 SECTOR21 WORD COUNT0128 UNIT00. Fresh status40commands,
+2errors (seek E03/E02), READmax6us/WRITEmax3us, lastcommand6000/RAR0035,
+CSR0040. Trace step32 WR/TO/OV/ZF/CM, step33 WR/EC/CM, step34 CK/EC/CM.
+
+Found/reproduced in isolated production-RTL simulation: any STM32 DATA read
+reasserts HP data flag, including CHECK sector-count consumption. That creates
+an unwanted DMA request in step34, which arms READ DMA to catch a misdecoded
+CHECK opcode. Manual3-28 says CHECK performs no data transfers. Isolated
+candidate gates stm32_read_7900_data_negedge with ~command_is_check_data ONLY
+in set_data_channel_flag_buffer; count IRQ acknowledgement remains unchanged.
+Candidate test confirms SRQ stays0, CSR6 clears, and command attention still
+sets command flag. Production RTL NOT changed; bitstream/firmware NOT rebuilt
+or reprogrammed during this check. Candidate needs permanent regression test,
+full CPU step34 validation and normal RTL/build checks before hardware use.
+Evidence/candidate under build/check-step34/, result.json includes source/log
+hashes, HP console and fresh STM32 status. User told to keep HP halted.
+
+Earlier reported A64/B4 after update: console at17:20:34Z says H46 READ
+IN STEP26; E64 STATUS IS040001 SHOULD BE000000; same E47 word8 mismatch as
+previous run.040000 is First Status, not Overrun020000. Crucially fresh STM32
+? still commands0/errors0/seek-completion-valid0, response maxima0, CSR0040.
+No new H0 banner, startup seeks, WR or RD events since firmware reset. Thus
+no backend transfer with new timing has executed; likely resumed old failure
+path, not established fresh diagnostic startup. No hardware resets/changes
+made during this check. Initially asked user P100/S14 RUN then report haltcode/P
+(expected102074/P012307); that request is superseded below. Evidence in
+build/transfer-timing/retest-after-update/. Do not classify this as a new20us
+transfer-timing failure merely from A64 or the repeated step26 label.
+
+User objected to re-entering configuration; agrees execution switches should
+be0, thought normal address100. Rechecked original Rev1805 source part01
+header: CONFIGURATION ADDRESS100, STARTING ADDRESS2000. Part03 ORG2000 START
+initializes globals and prints H0. Both configured.hex and section1.hex retain
+100=124512,512=012231,2000=107700; INIT at12231 ends HLT74 then indirect JMP2000.
+Clarify: S0 is right for execution, but direct normal restart is P002000/S0;
+P100 is I/O reconfiguration, where S14 specifies disk data/command14/15. Don't
+mistake leaving S14 set after configuration for normal execution: its bits2/3
+request tables/custom program. No firmware/FPGA changes during clarification.
+
+After the physical step26 regression, user requested simulator study and timing
+adjustment before another attempt. Prepared backend adds100us initial data
+delay after command/image read for READ/WRITE/INIT, separate100us first-WRITE
+setup/CHECK count, and20us subsequent software response wait. SEEK500us unchanged.
+CSR-pending data is accepted before checking deadline; only an empty expired
+poll starts sector closing. This tolerates service stalls but cannot precisely
+timestamp whether a pending word arrived late. Existing6.4us/word sector closing,
+late discard, zero fill and CHECK behavior retained. USB reports READ/WRITE
+observed response maxima (poll times, not edge timestamps).
+
+CPU experiment exposed a second race: immediate two-word WRITE can finish
+before diagnostic DMAT first samples the DMA count, entering a long fallback
+wait and producing the old step32/E64 expected020001/actual000000. Initial data
+delay prevents this in tested cases. It is a startup guard, not measured disk
+rotation. scripts/hp2116_transfer_timing.py prepares/optionally runs an isolated
+production-RTL+original-CPU/DSN151302 experiment; its backend is SV, NOT C++.
+Final tests all PASS: CPU_SCALE15 with0.2us/8us poll delays through step32,
+CPU_SCALE31 with8us poll delay through27; six-us control truncates step24.
+Bounded scope, not full section1/RTE acceptance; exploratory slower-CPU runs
+beyond32 stalled around REFINE/CHECK and remain unresolved.
+
+Actual C++ full ASan/UBSan suite PASS, including default100us startup/rollover,
+normal3/6/12/19us jitter over2..512words, delayed pending polls12/25us,
+READ/WRITE50us late-word discard/zero fill, existing seek/CHECK/error regressions.
+ARM build PASS48060flash bytes/22716RAM, validated ELF
+49ae577c709e1a87104d021f4d7f624744ed1bae293f05ba98b73a6ba5ddabe8.
+Previous built/installed6us artifacts preserved under
+build/transfer-timing/installed-before/. Native/ARM logs and CPU acceptance
+under build/transfer-timing/. See diagnostics/hp13210/transfer-timing.md.
+Hardware now runs49ae577...; built/source/programmed hashes all match. Aggregate
+build/hardware-update-20261028.json and build/transfer-timing/acceptance.json
+updated with verified programming receipt, logs, backup and fresh status.
+No FPGA RTL changes; bitstream f9d066... remains current. Physical test pending.
+
+### Previous firmware: six-us sector-closing revision
+
+NEW PHYSICAL RESULT after successful configurator reload: diagnostic starts,
+but timing firmware REGRESSES to READ step26 (previous version reached32).
+Captured H46 READ IN STEP26; E64 STATUS IS020001 SHOULD BE000000;
+E47 DATA WORD0008 IS066550 SHOULD BE155320;
+H51 CYL0000 HEAD00 SECTOR00 WORD COUNT0128 UNIT00.
+Initial S14 was retained into table questions. Answered NO to cylinder and
+pattern changes; user confirmed S=0 before second NO, so remaining setup
+questions skipped and diagnostic ran. STM32 trace:14commands/2errors,
+two WR/TO/CM then RD/TO/OV/CM. E03/E02 occurred in seek tests as expected.
+This implicates overly tight6us response timeout/firmware timing, but actual
+hardware interword latency has not been measured. No further firmware or
+FPGA changes made. User told to leave HP halted; preserve current raw logs.
+Physical overrun acceptance FAILED; fix normal-transfer regression before
+claiming step32 timing correction works. Both serial captures remain active.
+
+Latest user retry after installation: diagnostic did not start correctly.
+NO new HP bytes captured; HP raw remains173bytes containing only the earlier
+step32/E64 message. Monitor PID8619 still owns both ports; stty independently
+confirms HP2400/7E2. Fresh STM32 ? report after the failed start: all4 READY,
+commands0/errors0/CSR0000/request0000, so no new backend commands dispatched.
+No reset or additional firmware change during this check. Requested current
+HP P/A/B (octal), RUN/halt state and haltcode to locate where startup stopped.
+Do not claim the overrun update has passed a physical diagnostic run.
+
+Startup follow-up: user starts P=000100/S=000014, expects HLT102074,
+but HP keeps running; manually halted at P=077373. Offline reference
+configured.hex has 077372=102316 (SFS16), 077373=027372 (JMP077372),
+077374=102516 (LIA16): configurator terminal-input wait, not inherently
+corrupt memory. Reference terminal SC16 is simulation configuration only;
+need actual HP words before identifying its patched select code. Diagnostic
+source confirms S low6 bits at P100 are disk DATA select code, so S14 is
+correct and must not be changed to simulator's initial configurator S16.
+Original configurator and DSN151302 ABS records all pass checksums;
+configurator loads000002..007677 before relocation, diagnostic000100..012402.
+User panel readback: 000100=124512, 077372=102311, 077373=027372.
+These match diagnostic JMP CNFIG,I and the relocated terminal-input loop
+patched to SC11 (octal). They establish intact sampled words, not all RAM.
+Source INIT (Rev1805 part08) only reads switches, patches channel/DMA words,
+and HLT74; it has no terminal-input call. Reference CNFIG pointer at000512
+is012231; INIT012231=015130 calls SWR001130 (switch reader, LIA1).
+Thus unexplained diversion to terminal input persists; reloading DSN151302
+is the next recovery step, keeping S14 for configuration. No HP input sent.
+Host-escalated check confirms capture PID8619 still owns both serial ports.
+
+User now explicitly authorizes HP console interaction with configurator:
+line printer NONE, paper-tape input2748,12, then ready diagnostic tape and
+enter 7900 DSN151302. This supersedes receive-only restriction for these
+specific replies. Existing capture still reader, HP2400/7E2 confirmed.
+Started build/serial-logs/configurator-replies.py (exec session32211), watching
+NEW hp.raw output from byte173. It sent paced NONE then2748,12 after matching
+prompts at16:47:45Z/16:47:46Z, recorded hp-transmissions.jsonl, and exited
+successfully at DSN prompt. Captured2100,DMA,MPRT,32K MEMORY; both replies
+echoed and accepted. HP now says READY DIAG. INPUT DEVICE and waits at
+DSN(,SEQ.DIAG.EXECUT.). User has been asked to ready7900/7901 DSN151302 tape
+on PTR, leave HP running and confirm; DO NOT send DSN before tape readiness
+confirmation. Capture remains active; helper32211 finished. If user chooses
+own terminal instead, release HP capture explicitly.
+
+User confirmed tape ready; sent151302+CR paced at16:48:42Z and captured
+its echo. No subsequent console text yet; load completion requires panel
+halt confirmation (reference configurator completion HLT102077 atP077237).
+Do not claim successful load based on echo. After successful configurator
+load halt, diagnostic setup is P100/S14 then HLT102074; execution switches0.
+User subsequently confirmed diagnostic loaded correctly and is starting it.
+Reminded P100/S14 -> HLT102074 -> S0/RUN; fresh physical diagnostic result
+pending. Both raw captures continue; no firmware/FPGA changes during reload.
 
 User explicitly requested fixing timing after step32. STM32 firmware now has
 separate100us first-write-word/CHECK-count setup and6us interword response
