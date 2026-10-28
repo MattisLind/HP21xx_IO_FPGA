@@ -151,7 +151,7 @@ prepared offline and has not yet been downloaded.
 | `??` | Unrecognized command observed |
 | `CM` | Command completion path taken |
 | `SC`, `SA` | Seek completed, or attention suppressed by the FPGA's seek-aborted latch |
-| `TO`, `ZF`, `EC` | Word-gap timeout, partial-sector zero-fill, end of two-head cylinder |
+| `TO`, `ZF`, `EC`, `OV` | Word-gap timeout, partial-sector zero-fill, end of two-head cylinder, late-word overrun (word discarded) |
 
 These records describe the STM32's view. Normal status and address-record
 operations are handled inside the FPGA and do not generate a backend command
@@ -230,13 +230,26 @@ There are no FAT or USB calls during individual word handshakes. This avoids
 per-sector SD latency within a transfer, but initial read latency and final
 write latency still depend on the card. Image geometry/ranges are checked.
 
-The initial word-gap timeout is **100 microseconds**, deliberately more lenient
-than the simulation's sub-microsecond waits. It ends short transfers but is
-not the cycle-accurate DMA-overrun mechanism. The diagnostic's specially timed
-overrun case may fail; the reference's delayed 3 µs overrun probe has not been
-reproduced. Filesystem latency, polling throughput and FSMC timing must be
-measured before tightening this. The backend retains only one pending command;
-a further command arriving before it is serviced reports overrun.
+The first write word and CHECK count have a **100 microsecond setup timeout**.
+Subsequent WRITE words and READ acknowledgements use a **6 microsecond response
+deadline**, the manual's 5.9 us maximum rounded to the firmware clock. Time is
+sampled after FSMC accesses so their latency does not reduce the next response
+budget. The manual's 156,250 words/s rate gives a **6.4 us disk word period**.
+After an interword timeout, the controller remains busy for the remaining words
+of the current sector at that rate. During this closing interval late STCs are
+acknowledged and discarded, Overrun is set, and no late word reaches the image.
+The accepted prefix is preserved and the rest of a partial write sector is zero
+filled. SD writes/sync happen after closing; another poll before command
+completion catches late strobes and retains command packets arriving during
+blocking media I/O. READ uses the same closing interval without staging more
+data. Normal full-cylinder termination retains EOC instead of treating the
+continuation request as an overrun.
+
+This is a polling timing model with microsecond resolution, not an FPGA
+timestamp of each HP edge. Interrupt/service latency still matters on hardware.
+`OV` records an emulated overrun status condition, without adding an E-code or
+backend fault count. The backend retains one pending command; a further
+command arriving before it is serviced reports pending-command overrun.
 
 ## Verification and next hardware checks
 

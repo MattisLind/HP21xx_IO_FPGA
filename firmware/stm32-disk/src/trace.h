@@ -12,7 +12,7 @@ enum class Event : uint8_t {
   OfflineError, SeekBusyError, SeekAddressError, CommandError, AddressError,
   CylinderError, ReadError, WriteError, PendingError, CountTimeoutError,
   SdError, ConfigOpenError, ConfigReadError, ConfigParseError,
-  ImageOpenError, ImageSizeError, TraceOverflow
+  ImageOpenError, ImageSizeError, TransferOverrun, TraceOverflow
 };
 
 inline const char *event_code(Event event) {
@@ -46,6 +46,7 @@ inline const char *event_code(Event event) {
     case Event::Timeout: return "TO";
     case Event::ZeroFill: return "ZF";
     case Event::EndCylinder: return "EC";
+    case Event::TransferOverrun: return "OV";
     case Event::OfflineError: return "E01";
     case Event::SeekBusyError: return "E02";
     case Event::SeekAddressError: return "E03";

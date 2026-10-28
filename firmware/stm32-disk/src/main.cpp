@@ -10,6 +10,7 @@ static hp::Trace trace;
 
 class FsmcBus : public hp::Bus {
  public:
+  uint32_t now_us(uint32_t) override { return micros(); }
   uint16_t read(uint16_t reg) override {
     const uint16_t value=*reinterpret_cast<volatile uint16_t *>(0x60000000UL+2U*reg);
     __DSB();
@@ -121,6 +122,8 @@ static void report() {
                 unsigned(backend.seek_completion_command(2)),unsigned(backend.seek_completion_command(3)));
   append_report("Experimental fixed seek delay=%lu us\r\n",
                 static_cast<unsigned long>(hp::Backend::SeekTimeUs));
+  append_report("DMA response timeout=%lu us; disk word period=6.4 us; sector-end overrun checks enabled\r\n",
+                static_cast<unsigned long>(hp::Backend::ResponseTimeoutUs));
 }
 
 void setup() {

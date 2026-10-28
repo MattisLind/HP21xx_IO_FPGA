@@ -1,8 +1,115 @@
 # HP 2100 / HP13210 emulator: Codex handover
 
-Updated **2026-10-25**, Europe/Oslo. Read this first when continuing on the
+Updated **2026-10-28**, Europe/Stockholm. Read this first when continuing on the
 laptop beside the HP 2100. This is a summary of the conversation and actual
 bring-up state; some older README status paragraphs describe earlier stages.
+
+## Current hardware and capture — 2026-10-28
+
+### Current firmware: sector-closing overrun correction installed
+
+User explicitly requested fixing timing after step32. STM32 firmware now has
+separate100us first-write-word/CHECK-count setup and6us interword response
+deadlines (manual5.9us rounded to microsecond clock). Main FsmcBus samples
+micros() after bus accesses to avoid subtracting their time from next response.
+Manual table1-1 gives156250words/s ->6.4us/word. After a word timeout, separate
+READ/WRITE drain states keep Busy/command incomplete through remaining sector
+words at that rate. Late strobes are acknowledged/discarded and set Overrun;
+WRITE preserves valid prefix and zero-fills sector tail. Late READ does not
+stage another word. INIT retains zero-attention completion. Full-cylinder EOC
+retains previous behavior. No FPGA RTL changes.
+
+Final post-SD-write CSR poll catches late words arriving during blocking I/O
+and retains command/RAR packets instead of losing destructive CSR reads.
+New OV trace code identifies late-word status (not an E-code/fault counter).
+USB status prints6us response/6.4us word timing. This remains firmware polling
+with microsecond quantization/interrupt latency, not hardware edge timestamps.
+
+Old firmware fails new late-third-word regression. Complete native ASan/UBSan
+suite PASS, including WRITE/READ lateness, discard/zero-fill, timer rollover,
+late SD-write strobe plus pending SEEK, normal5us gaps/6us boundary, first-word
+setup, INIT completion, sector lengths1/2/30/127/128/129, and existing106 CHECK
+cases. Native50us late-word repro: Overrun1, persisted third word0000, notBEEF.
+ARM build PASS:47844flash bytes,22704RAM. New ELF
+SHA25651334371b8277d2969a159c77ce559b70fa2af9125a0cd0f1f022b06ed68fef9.
+
+Installed/verified/reset. First ST-Link reset/probe failed before backup or
+erase; full backup/verify/program retry succeeded. Verified512KiB backup:
+build/stm32-disk/backups/before-disk-backend-20261028T162911377457Z.bin.
+Programming receipt build/stm32-disk/programmed.json matches current build.
+While STM32 halted, reloaded unchanged validated FPGA f9d066... SRAM image
+to clear old transfer state before starting new firmware. SPI flash untouched.
+
+New post-reset USB reports confirm FAT/all4 READY, commands/errors0, CSR0000,
+response6us/word6.4us/seek500us. Both monitors remain ACTIVE under
+build/serial-logs/20261028T160755Z/. HP remains halted; restart diagnostic from
+normal beginning. Physical overrun acceptance is PENDING; do not claim step32
+passes until a new run. Evidence/source/log hashes under
+build/write-overrun-investigation/acceptance.json. Aggregate current receipt
+build/hardware-update-20261028.json updated, previous receipt preserved.
+
+### Latest diagnostic: step32 WRITE missing overrun (CHECK fix passes)
+
+User reported A64/B4/HLT102001. Exact captured console:
+H45 WRITE IN STEP32; E64 STATUS IS000000 SHOULD BE020001;
+H51 CYL0000 HEAD01 SECTOR07 WORD COUNT0002 UNIT00.
+This is NEW: step30 cyclic check and step31 read/data verification advanced
+without a reported error. Trace has eight CK completions, no CHECK timeouts,
+and EC on the final49-sector case. CHECK correction now has physical evidence.
+
+Step32 intentionally writes two words, then issues a late third word (source
+comment ~50us later) to expect Overrun+any-error020001. Manual3-61 specifies
+5.9us maximum DMA response and overrun for a late transfer before command
+completion. C++ write path currently has a100us word gap and NO write-overrun
+detection/late-word discard during sector padding/completion. Reference SV
+worker does include a post-timeout overrun check. Do not just lower the gap
+or set a flag without preserving zero-fill/discard behavior (later step35
+checks the overrun word was not written).
+
+Native reproduction on current backend: two words, third wordBEEF at+50us,
+then timeout -> consumes3 words, persistsBEEF, Overrun0. This demonstrates
+the software gap; physical word timing is NOT measured by USB trace drain
+timestamps. Actual final trace WR/TO/ZF/CM has no Overrun indication.
+Fresh USB status:36commands,2errors,trace_dropped0,last_errorE02 (the earlier
+deliberate busy-seek test; E03 also expected earlier), last command1000,
+RAR0027 (head1/sector7), CSR0040. All drives still READY.
+
+Evidence/snapshots/repro: build/write-overrun-investigation/halt-20261028.json
+and repro-before.cpp/log. This was the failure BEFORE installing the current
+overrun correction above. Full diagnostic acceptance remains pending.
+
+### Connections and reload before that run
+
+User confirmed HP halted and requested latest images and all USB/serial checks.
+Xilinx cable initialized with known xusb_emb.hex (03fd:000d ->0008); JTAG
+identifies XC6SLX9 0x24001093. ST-Link identifies STM32F407, target3.269V.
+Both validated local images STILL match current source fingerprints; no code
+change or rebuild required. STM32 flash independently verified47868 bytes
+against CHECK-fixed ELF3f9c7321d0070602162dd5b531d52ce05062e63b9a72e667e17ea1946dd7d9df.
+It already contained the latest firmware, so flash was not rewritten.
+
+STM32 halted while FPGA SRAM reloaded with validated controller.bit,
+SHA256f9d066de0874ff1842ba0dfd1eca3f617e6afea89eca957511456a794edf4448.
+Physical FSMC scratch A55A/5AA5 and attention0/1/latch-preservation checks pass.
+FPGA reloaded once afterward to clear test state; then STM32 reset to run.
+SPI boot flash is still unchanged/old: FPGA load remains VOLATILE and must
+be repeated after a power cycle. No physical diagnostic acceptance yet.
+
+New capture ACTIVE: build/serial-logs/20261028T160755Z/ (monitor-reconnect.py).
+HP FTDI AH01E1EM /dev/ttyUSB4 open at2400 7E2; no HP bytes received while
+halted. STM32 USB378035813433 /dev/ttyACM0 open; user now belongs to dialout,
+so no per-reset ACL repair needed. Other ttyUSB0-3 belong to laptop modem.
+Repeated fresh USB reports: FAT mounted, drives0-3 READY, zero commands/errors,
+CSR0000/request0000, fixed seek500us. The old CSR0040 pending strobe is gone.
+HP input was not sent and HP remains halted. Ready for normal diagnostic
+startup; investigate startup/entry if it still fails to begin, rather than
+assuming the previous CHECK correction has passed on the physical machine.
+
+Receipts: build/hardware-update-20261028.json,
+build/controller-board/sram-downloaded.json,
+build/stm32-disk/flash-verified-20261028.json. Previous programming receipt
+still correctly records actual STM32 flash write on2026-10-26.
+Older stopped-monitor and firmware-state paragraphs below are historical.
 
 ## Laptop update — 2026-10-26
 

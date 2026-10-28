@@ -33,6 +33,9 @@ struct Address {
 struct Bus {
   virtual uint16_t read(uint16_t reg)=0;
   virtual void write(uint16_t reg, uint16_t value)=0;
+  // Hardware samples time after bus accesses; native tests use the supplied
+  // sample. This keeps FSMC access time out of the HP's response budget.
+  virtual uint32_t now_us(uint32_t sample) { return sample; }
   virtual ~Bus() = default;
 };
 struct Images {
@@ -66,8 +69,11 @@ class Backend {
   // Initial bring-up thresholds in real microseconds, not simulator nanoseconds.
   // Experimental fixed delay; not a measured mechanical drive timing model.
   static constexpr uint32_t WordTimeoutUs=100, SeekTimeUs=500;
+  // Manual 3-61: 5.9us response; rounded to the microsecond clock. Table1-1:
+  // 156250 words/s = 6.4us/word. Setup/count waits remain independent.
+  static constexpr uint32_t ResponseTimeoutUs=6;
  private:
-  enum Mode { Idle, Read, Write, CheckCount } mode_=Idle;
+  enum Mode { Idle, Read, Write, CheckCount, ReadDrain, WriteDrain } mode_=Idle;
   struct Drive { unsigned cylinder=0; bool seeking=false; uint32_t deadline=0; } drive_[Drives];
   Bus &bus_;
   Images &images_;
@@ -79,13 +85,18 @@ class Backend {
   uint8_t seek_completion_valid_=0;
   Event last_error_=Event::Boot;
   bool pending_=false, read_wait_=false;
+  bool overrun_reported_=false;
   bool failed_[Drives] = {};
   unsigned selected_=0, command_=0, position_=0, length_=0;
   Address address_;
   uint32_t deadline_=0, refresh_=0, commands_=0, errors_=0;
   void status(unsigned drive, uint16_t bits, bool set=true);
   void complete(bool attention_bit=true);
-  void finish_write();
+  void finish_write(bool check_overrun=true);
+  uint16_t poll();
+  void discard_late(uint16_t csr);
+  void start_drain(bool writing);
+  void drain(uint32_t now, uint16_t csr);
   void log(Event event) { if (trace_) trace_->push(event); }
   void mark(Event event) { log(drive_event(selected_)); log(event); }
   void error(Event event) { ++errors_; last_error_=event; mark(event); }

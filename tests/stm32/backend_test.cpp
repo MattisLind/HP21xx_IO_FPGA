@@ -4,6 +4,7 @@
 #include <string.h>
 #include <vector>
 #include <string>
+#include <functional>
 
 struct Bus : hp::Bus {
   uint16_t csr=0, cmd=0, rar=0, word=0, attention=0, status[4]={};
@@ -41,6 +42,7 @@ struct Images : hp::Images {
   std::vector<uint8_t> bytes[2] = {std::vector<uint8_t>(hp::ImageBytes,0x5a),
                                   std::vector<uint8_t>(hp::ImageBytes,0xa5)};
   unsigned reads=0, writes=0, written=0;
+  std::function<void()> during_write;
   bool ready(unsigned d) const override { return online[d]; }
   bool read(unsigned d,uint32_t off,uint8_t *p,unsigned size) override {
     assert(d<2 && off+size<=hp::ImageBytes);
@@ -51,6 +53,7 @@ struct Images : hp::Images {
   bool write(unsigned d,uint32_t off,const uint8_t *p,unsigned size) override {
     assert(d<2 && off+size<=hp::ImageBytes);
     ++writes; written=size;
+    if (during_write) during_write();
     if (fail_write) return false;
     memcpy(bytes[d].data()+off,p,size); return true;
   }
@@ -166,7 +169,7 @@ static void read_tests() {
   // No further filesystem calls in the word handshake.
   for (unsigned i=0;i<127;++i) { f.bus.csr|=0x40; f.engine.step(i+2); }
   assert(f.bus.output.size()==128 && f.images.reads==1);
-  f.engine.step(300); assert(!f.engine.active() && f.bus.attention==1);
+  f.engine.step(1000); assert(!f.engine.active() && f.bus.attention==1);
   assert(f.images.writes==0);
 }
 static void write_tests() {
@@ -174,18 +177,115 @@ static void write_tests() {
   f.bus.command(1,0,{0,0,0}); f.engine.step(0);
   f.bus.input(0x1234); f.engine.step(1);
   f.bus.input(0xabcd); f.engine.step(2);
-  f.engine.step(103);
+  f.engine.step(1000);
   assert(!f.engine.active() && f.images.written==256);
   assert(f.images.bytes[0][0]==0x34 && f.images.bytes[0][1]==0x12);
   assert(f.images.bytes[0][2]==0xcd && f.images.bytes[0][3]==0xab);
   for (unsigned i=4;i<256;++i) assert(f.images.bytes[0][i]==0);
   assert(f.images.bytes[0][256]==0x5a); // Following sectors unchanged.
   // Completed sectors plus a partial one are persisted, without truncating.
-  f.bus.command(1,0,{0,0,1}); f.engine.step(200);
-  for (unsigned i=0;i<129;++i) { f.bus.input(uint16_t(i)); f.engine.step(201+i); }
-  f.engine.step(500); assert(f.images.written==512);
+  f.bus.command(1,0,{0,0,1}); f.engine.step(2000);
+  for (unsigned i=0;i<129;++i) { f.bus.input(uint16_t(i)); f.engine.step(2001+i); }
+  f.engine.step(3000); assert(f.images.written==512);
   assert(f.images.bytes[0][256]==0 && f.images.bytes[0][258]==1);
   assert(f.images.bytes[0][768]==0x5a);
+}
+static void late_word_tests() {
+  // Actual S1 step32 pattern: two valid words, then a third after about50us.
+  // Poll in between, as the running backend does. The third must be discarded
+  // while the sector is still being padded, not appended to the image.
+  for (uint32_t start : {0U,0xfffffff0U}) {
+    Fixture f;
+    const hp::Address address{0,1,7};
+    f.bus.command(1,0,address); f.engine.step(start);
+    f.bus.input(0x1234); f.engine.step(start+1);
+    f.bus.input(0x5678); f.engine.step(start+2);
+    for (unsigned i=3;i<52;++i) f.engine.step(start+i);
+    assert(f.engine.active() && f.bus.attention==0);
+    f.bus.input(0xbeef); f.engine.step(start+52);
+    assert(f.bus.status[0]&hp::Overrun);
+    assert(f.engine.active() && f.bus.attention==0 && f.images.writes==0);
+    f.engine.step(start+2000);
+    assert(!f.engine.active() && f.bus.attention==1 && f.images.written==256);
+    const unsigned off=address.offset();
+    assert(f.images.bytes[0][off]==0x34 && f.images.bytes[0][off+2]==0x78);
+    for (unsigned i=4;i<256;++i) assert(f.images.bytes[0][off+i]==0);
+    assert(f.images.bytes[0][off+256]==0x5a);
+  }
+  // Slow synchronous SD/FAT writes must not hide a late strobe or consume a
+  // queued command without retaining its command/RAR snapshot.
+  Fixture io;
+  io.images.during_write=[&] {
+    io.bus.input(0xbeef);
+    io.bus.command(3,1,{7,0,0});
+  };
+  io.bus.command(1,0,{0,0,0}); io.engine.step(0);
+  io.bus.input(0x1234); io.engine.step(1);
+  io.engine.step(2000);
+  assert(io.bus.status[0]&hp::Overrun);
+  assert(io.images.bytes[0][2]==0 && io.bus.consumed==2);
+  io.engine.step(2001); io.engine.step(6001);
+  assert(io.bus.attention==3);
+  // The corresponding step35 READ overrun must not stage another HP word.
+  Fixture read;
+  read.bus.command(2,0,{0,1,7}); read.engine.step(0); read.engine.step(1);
+  for (unsigned i=0;i<30;++i) { read.bus.csr|=0x40; read.engine.step(2+i); }
+  for (unsigned i=32;i<82;++i) read.engine.step(i);
+  assert(read.engine.active() && read.bus.attention==0);
+  const unsigned staged=read.bus.output.size();
+  read.bus.input(0xbeef); read.engine.step(82);
+  assert(read.bus.status[0]&hp::Overrun);
+  read.engine.step(2000);
+  assert(!read.engine.active() && read.bus.attention==1);
+  assert(read.bus.output.size()==staged && read.images.writes==0);
+}
+static void response_boundary_tests() {
+  // A first-word setup wait is not the interword deadline. Five-us gaps
+  // remain valid; a word at the rounded six-us deadline is already late.
+  for (unsigned command : {1U,9U}) {
+    Fixture f;
+    f.bus.command(command,0,{0,0,0}); f.engine.step(0);
+    f.bus.input(0x1234); f.engine.step(50);
+    f.bus.input(0x5678); f.engine.step(55);
+    f.bus.input(0xbeef); f.engine.step(61);
+    assert(f.bus.status[0]&hp::Overrun);
+    assert(f.engine.active() && f.bus.attention_writes.empty());
+    f.engine.step(2000);
+    assert(f.images.bytes[0][2]==0x78 && f.images.bytes[0][4]==0);
+    assert(f.bus.attention_writes==std::vector<uint16_t>{uint16_t(command==1 ? 1 : 0)});
+  }
+  for (unsigned words : {1U,2U,30U,127U,128U,129U}) {
+    Fixture f;
+    f.bus.command(1,0,{0,0,0}); f.engine.step(0);
+    uint32_t now=50;
+    for (unsigned i=0;i<words;++i,now+=5) {
+      f.bus.input(uint16_t(0x1000+i)); f.engine.step(now);
+    }
+    const uint32_t last=now-5;
+    f.engine.step(last+5);
+    assert(f.engine.active() && f.bus.attention==0);
+    f.engine.step(last+6);
+    if (words%128) assert(f.engine.active() && f.bus.attention==0);
+    f.engine.step(last+1000);
+    assert(!f.engine.active() && !(f.bus.status[0]&hp::Overrun));
+    assert(f.bus.consumed==words && f.bus.attention==1);
+    for (unsigned i=0;i<words;++i) {
+      assert(f.images.bytes[0][2*i]==uint8_t(i));
+      assert(f.images.bytes[0][2*i+1]==0x10);
+    }
+    for (unsigned i=2*words;i<f.images.written;++i) assert(f.images.bytes[0][i]==0);
+    assert(f.images.bytes[0][f.images.written]==0x5a);
+    // Once completion is signalled, a new preloaded data word is not an
+    // overrun belonging to the already completed operation.
+    f.bus.input(0xbeef); f.engine.step(last+1010);
+    assert(!(f.bus.status[0]&hp::Overrun) && f.bus.consumed==words);
+  }
+  Fixture read;
+  read.bus.command(2,0,{0,0,0}); read.engine.step(0); read.engine.step(50);
+  for (unsigned i=1;i<=30;++i) { read.bus.csr|=0x40; read.engine.step(50+5*i); }
+  read.engine.step(2000);
+  assert(!read.engine.active() && !(read.bus.status[0]&hp::Overrun));
+  assert(read.bus.output.size()==31 && read.bus.attention==1);
 }
 static void end_cylinder_and_errors() {
   Fixture f;
@@ -199,7 +299,7 @@ static void end_cylinder_and_errors() {
   // I/O failure is surfaced as drive errors, never a fabricated successful write.
   f.images.fail_write=true;
   f.bus.command(1,0,{202,3,23}); f.engine.step(5000);
-  f.bus.input(0xbeef); f.engine.step(5001); f.engine.step(5200);
+  f.bus.input(0xbeef); f.engine.step(5001); f.engine.step(6000);
   assert(f.bus.status[0]&(hp::DataError|hp::Unsafe|hp::NotReady));
   assert(f.engine.errors()==1);
   Fixture offline;
@@ -214,12 +314,12 @@ static void pending_and_check_tests() {
   f.bus.command(2,0,{1,0,0}); f.engine.step(1);
   assert(!f.images.reads);
   f.engine.step(4000); assert(f.images.reads==1);
-  f.engine.step(4001); f.engine.step(4200); assert(!f.engine.active());
+  f.engine.step(4001); f.engine.step(5000); assert(!f.engine.active());
   // A command during a stream is captured despite CSR's destructive read.
   Fixture q;
   q.bus.command(2,0,{0,0,0}); q.engine.step(0); q.engine.step(1);
   q.bus.command(3,1,{7,0,0}); q.engine.step(2);
-  q.engine.step(200); q.engine.step(201); q.engine.step(4201);
+  q.engine.step(1000); q.engine.step(1001); q.engine.step(1501);
   assert(q.bus.attention&2);
 }
 static void check_data_tests() {
@@ -319,10 +419,10 @@ static void trace_tests() {
   Fixture f;
   assert((take_trace(f.trace)==std::vector<std::string>{"R0","R1","N2","N3"}));
   f.bus.command(1,0,{0,0,0}); f.engine.step(0);
-  f.bus.input(0xabcd); f.engine.step(1); f.engine.step(102);
+  f.bus.input(0xabcd); f.engine.step(1); f.engine.step(1000);
   assert((take_trace(f.trace)==std::vector<std::string>{"D0","WR","D0","TO","D0","ZF","D0","CM"}));
   assert(f.engine.errors()==0); // Normal short-transfer timeout is not an error.
-  f.bus.command(2,3,{0,0,0}); f.engine.step(200);
+  f.bus.command(2,3,{0,0,0}); f.engine.step(2000);
   assert(contains(take_trace(f.trace),"E01"));
 
   Fixture seek;
@@ -346,7 +446,7 @@ static void trace_tests() {
   assert(contains(take_trace(media.trace),"E07"));
   media.images.fail_write=true;
   media.bus.command(1,1,{0,0,0}); media.engine.step(1);
-  media.bus.input(123); media.engine.step(2); media.engine.step(103);
+  media.bus.input(123); media.engine.step(2); media.engine.step(1000);
   assert(contains(take_trace(media.trace),"E08"));
 
   Fixture pending;
@@ -366,7 +466,7 @@ static void trace_tests() {
   context.engine.step(hp::Backend::SeekTimeUs-9);
   take_trace(context.trace);
   context.engine.step(hp::Backend::SeekTimeUs);
-  context.engine.step(hp::Backend::SeekTimeUs+hp::Backend::WordTimeoutUs);
+  context.engine.step(2000);
   assert((take_trace(context.trace)==std::vector<std::string>{"D1","SC","D0","TO","D0","CM"}));
 }
 static void unsupported_command_tests() {
@@ -393,10 +493,10 @@ static void unsupported_command_tests() {
 }
 int main() {
   static_assert(hp::ImageBytes==4988928);
-  config_tests(); startup_seek_tests(); seek_geometry_tests(); seek_busy_recovery_tests(); read_tests(); write_tests();
+  config_tests(); late_word_tests(); response_boundary_tests(); startup_seek_tests(); seek_geometry_tests(); seek_busy_recovery_tests(); read_tests(); write_tests();
   end_cylinder_and_errors(); check_data_tests(); pending_and_check_tests();
   reset_and_boundary_tests();
   trace_tests();
   unsupported_command_tests();
-  puts("PASS: configuration, geometry, startup/POPIO refresh, concurrent seeks/abort, timer rollover, reads, writes, partial sectors, EOC, media failures, pending commands, autonomous CHECK/48-49 sector boundaries, trace ordering, E01-E10 and queue overflow");
+  puts("PASS: configuration, geometry, startup/POPIO refresh, concurrent seeks/abort, timer rollover, reads, writes, partial sectors, late-word discard/overrun/sector closing/SD stalls, EOC, media failures, pending commands, autonomous CHECK/48-49 sector boundaries, trace ordering, E01-E10 and queue overflow");
 }

@@ -37,17 +37,46 @@ void Backend::media_error(Event event) {
   status(selected_, DataError|Unsafe|NotReady);
   complete();
 }
-void Backend::finish_write() {
+void Backend::finish_write(bool check_overrun) {
   if (position_) {
     const unsigned bytes=((position_+SectorBytes-1)/SectorBytes)*SectorBytes;
     if (bytes!=position_) mark(Event::ZeroFill);
     memset(buffer_+position_, 0, bytes-position_);
-    if (!images_.write(selected_, address_.offset(), buffer_, bytes)) {
+    const bool written=images_.write(selected_, address_.offset(), buffer_, bytes);
+    // A strobe can arrive while SD/FAT blocks. Capture any command packet
+    // consumed by this CSR read, and reject late data before HP completion.
+    const uint16_t csr=poll();
+    if (check_overrun) discard_late(csr);
+    if (!written) {
       media_error(Event::WriteError);
       return;
     }
   }
   complete(command_ != 9);
+}
+void Backend::discard_late(uint16_t csr) {
+  if (!(csr&0x40)) return;
+  (void)bus_.read(Data); // Acknowledge/discard; never append or stage a word.
+  if (!overrun_reported_) {
+    status(selected_,Overrun);
+    mark(Event::TransferOverrun);
+    overrun_reported_=true;
+  }
+}
+void Backend::start_drain(bool writing) {
+  mark(Event::Timeout);
+  // Keep the command busy through the remainder of the physical data field.
+  // This is sector geometry/rate, not a delay tuned to the late-word test.
+  const unsigned words=position_/2%Words;
+  const unsigned remaining=words ? Words-words : 0;
+  deadline_+=(remaining*32+4)/5; // ceil(remaining * 6.4us), rollover-safe.
+  mode_=writing ? WriteDrain : ReadDrain;
+}
+void Backend::drain(uint32_t now, uint16_t csr) {
+  discard_late(csr);
+  if (!expired(now,deadline_)) return;
+  if (mode_==WriteDrain) finish_write();
+  else complete();
 }
 void Backend::dispatch(uint16_t cmd, uint16_t seek, uint32_t now) {
   selected_=cmd&3;
@@ -123,6 +152,7 @@ void Backend::dispatch(uint16_t cmd, uint16_t seek, uint32_t now) {
   position_=0;
   length_=address_.remaining();
   read_wait_=false;
+  overrun_reported_=false;
   deadline_=now+WordTimeoutUs;
   if (command_==2) {
     if (!images_.read(selected_, address_.offset(), buffer_, length_)) {
@@ -137,7 +167,7 @@ void Backend::dispatch(uint16_t cmd, uint16_t seek, uint32_t now) {
     mode_=Write;
   }
 }
-void Backend::step(uint32_t now) {
+uint16_t Backend::poll() {
   // Every CSR read acknowledges command IRQ, even while transferring data.
   // Capture both command and RAR immediately so it cannot disappear unnoticed.
   const uint16_t csr=bus_.read(Csr);
@@ -156,6 +186,11 @@ void Backend::step(uint32_t now) {
       pending_=true;
     }
   }
+  return csr;
+}
+void Backend::step(uint32_t now) {
+  const uint16_t csr=poll();
+  now=bus_.now_us(now);
   for (unsigned d=0; d<Drives; ++d) {
     if (drive_[d].seeking && expired(now,drive_[d].deadline)) {
       drive_[d].seeking=false;
@@ -193,13 +228,20 @@ void Backend::step(uint32_t now) {
     }
     return;
   }
+  if (mode_==ReadDrain || mode_==WriteDrain) {
+    drain(now,csr);
+    return;
+  }
   if (mode_==Write) {
-    if (csr&0x40) {
+    if (position_ && expired(now,deadline_)) {
+      start_drain(true);
+      drain(now,csr);
+    } else if (csr&0x40) {
       const uint16_t word=bus_.read(Data);
       buffer_[position_++]=uint8_t(word);
       buffer_[position_++]=uint8_t(word>>8);
-      deadline_=now+WordTimeoutUs;
-      if (position_==length_) { mark(Event::EndCylinder); status(selected_,EndCylinder); finish_write(); }
+      deadline_=bus_.now_us(now)+ResponseTimeoutUs;
+      if (position_==length_) { mark(Event::EndCylinder); status(selected_,EndCylinder); finish_write(false); }
     } else if (expired(now,deadline_)) { mark(Event::Timeout); finish_write(); }
     return;
   }
@@ -223,8 +265,12 @@ void Backend::step(uint32_t now) {
   }
   // READ DATA: stage a word, then await the HP's next STC.
   if (read_wait_) {
+    if (expired(now,deadline_)) {
+      start_drain(false);
+      drain(now,csr);
+      return;
+    }
     if (!(csr&0x40)) {
-      if (expired(now,deadline_)) { mark(Event::Timeout); complete(); }
       return;
     }
     read_wait_=false;
@@ -238,6 +284,6 @@ void Backend::step(uint32_t now) {
   bus_.write(Data,word);
   position_+=2;
   read_wait_=true;
-  deadline_=now+WordTimeoutUs;
+  deadline_=bus_.now_us(now)+ResponseTimeoutUs;
 }
 } // namespace hp
