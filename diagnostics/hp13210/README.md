@@ -1,5 +1,11 @@
 # HP 13210 flag bring-up
 
+The [step35 READ-overrun comparison](read-overrun.md) reproduces the current
+physical failure and compares SIMH, the original READ worker and a CLC-aware
+FPGA candidate. The candidate passes simulation but is not installed.
+The final production fix is now tested and packaged for download; see that
+report for artifacts and validation. Hardware programming is still pending.
+
 The [CHECK investigation](check-data.md) compares the step34 failure with SIMH
 and the original Verilog backend. SIMH passes the unmodified diagnostic;
 its CHECK path supports DMA when requested. That behavior is now implemented

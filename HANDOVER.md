@@ -6,6 +6,105 @@ bring-up state; some older README status paragraphs describe earlier stages.
 
 ## Current hardware and capture — 2026-10-28
 
+### Physical retry: step35 PASSED; new halt at step46 WRITE
+
+Fresh H0 banner after SRAM installation; diagnostic advances beyond step35
+and halts H45 WRITE IN STEP46, E64 STATUS IS000041 SHOULD BE000000;
+H51 CYL0000 HEAD01 SECTOR16 WORD COUNT1024 UNIT00. Physical evidence now
+supports the READ-CLC step35 fix. Full diagnostic still does not pass.
+Fresh STM32 query: all4 READY, commands53/errors3/dropped0, CSR0040,
+request00C0, command1000, RAR0030, last_errorE06; READmax6us/WRITEmax3us.
+Preserved evidence: build/step35-download/install/retest/result.json,
+hp.txt and stm32-status.txt; serial capture remains active. No hardware
+changes during this check. Step46 cause has not yet been investigated.
+
+
+### Step35 FPGA INSTALLED — ready for physical retry
+
+HP halt confirmed by user. Initialized Xilinx cable; loaded production READ-CLC
+fix into XC6SLX9 SRAM (SHA256 1c7f3790170f5b56724b706f539eac732951aac8b27703935d741f8b40f02b46).
+STM32 halted during loading; FSMC scratch/attention checks PASS, then FPGA
+reloaded to clear test state. Existing STM32 ELF5c509335... verified over SWD
+and reset/run; no STM32 flash write and no FPGA SPI flash write.
+Fresh USB status: FAT mounted, drives0–3 READY, commands/errors/dropped0,
+CSR/request0000, last_error none. Both serial captures open, monitor PID27144,
+logs build/serial-logs/20261028T212939Z. Installation evidence and receipt:
+build/step35-download/install/installed.json. Initial cable access raced USB
+re-enumeration; retry succeeded, followed by successful final load.
+
+Physical step35 retry PENDING. Restart configured diagnostic P002000/S000000
+and RUN. Keep FPGA powered: this is a volatile SRAM installation. Earlier
+sections below preserve historical preparation and investigation status.
+
+
+### Step35 download package READY — dongles disconnected, NOT programmed
+
+User requested all FPGA/STM32 artifacts prepared for download, explicitly
+noting disconnected dongles. Promoted READ-CLC fix to production RTL with
+permanent regressions. Final READ CLC ends its data phase; a later STC before
+completion sets Overrun and is not sent to STM32 as CSR6. Classification is
+latched for the whole STC pulse. Both command flag AND flag buffer qualify
+completion, including backend completion before HP ENF. Normal20us software
+response window retained; CHECK/WRITE/INIT and final WRITE/INIT STC+CLC work.
+
+All22 controller variants and board/LED tests PASS. New tests reject old RTL
+and a deliberately unsafe combinational-only suppression control. Tests cover
+normal/final READ, late STC, completion before ENF and during held STC, valid
+held STC during completion, new command, CRS/POPIO/reset, CHECK, WRITE/INIT
+last-word preservation, phase/pulse/backend variants. Production CPU/SV model
+passes steps1–35 at200ns/8us polling; actual C++ sanitizer suite and ARM build
+PASS. No diagnostic patch. ISE minimum period8.345ns, meets50MHz.
+
+New FPGA controller.bit SHA256:
+1c7f3790170f5b56724b706f539eac732951aac8b27703935d741f8b40f02b46.
+Compatible STM32 ELF/BIN/HEX rebuilt; ELF is unchanged5c509335... (same CHECK-DMA
+firmware already installed). Source/build receipts refreshed; no C++ code change
+needed for the FPGA-owned termination fix. ARM48256 flash bytes/22716 RAM.
+
+Download bundle: build/step35-download/hp13210-step35-ready.zip, unpacked under
+build/step35-download/ready/. Includes controller.bit, STM32 ELF/BIN/HEX,
+optional Xilinx cable firmware, build/validation receipts, timing report,
+SHA256SUMS and download instructions. Prepared receipt:
+build/step35-download/prepared.json. Previous artifacts saved under previous/.
+
+NO hardware/programmer/serial accesses during preparation. Installed FPGA is
+still1557ca2... and installed STM32 is5c509335...; physical step35 still fails
+until the new FPGA is installed and tested. No SPI flash writes. When dongles
+are connected, confirm HP halted, halt STM32 for SRAM load, run FSMC checks,
+reload FPGA to clear test state, verify existing STM32 ELF (reflash with fresh
+verified backup only if needed), reset/run and confirm FAT/all4 READY/idleCSR.
+Normal configured diagnostic restart P002000/S000000. Physical acceptance of
+the prepared update remains PENDING.
+
+### Step35 investigation: final READ CLC lost; isolated candidate passes
+
+No hardware/production firmware/RTL changes. Supported SIMH32 passes step35:
+final READ DMA has IOI+CLC+EDT, then the diagnostic's OVJ issues OTA+STC data.
+SIMH clears dpd_xfer on CLC and sets Overrun for later STC while busy. Our
+FPGA ignores data-channel CLC. Current CPU/SV model reproduces physical E64:
+extra request observed9.92us after staging word30, within20us response window,
+so backend stages31 instead of setting Overrun. Actual C++ sanitizer probe
+reproduces this:10us=>31staged/OV0,50us=>30staged/OV1. Physical gap NOT measured.
+
+Original READ worker (800ns wait,3000ns delay,1200ns probe) passes isolated
+step35 with current transport and original CPU speed. Literal original whole
+CPU/controller/backend step35 replay still gets E14 thenE64 under Verilator5.052;
+do not claim that whole original combination passed. Step35 memory snapshot
+comes from unpatched diagnostic execution in SIMH before the test.
+
+Isolated FPGA candidate latches READ CLC, sets Overrun on later STC before
+command completion, suppresses the invalid CSR6 request. Current CPU/SV model
+passes steps1–35 at200ns/8us polling, still with20us normal response window.
+Candidate is ONLY under build/step35-investigation/clc-candidate/; production
+core is unchanged, no bitstream synthesized/programmed. Needs permanent
+directed RTL tests and pulse/completion-boundary handling before promotion.
+Do not blindly shorten the timeout: hardware normal READmax17us was observed.
+
+See diagnostics/hp13210/read-overrun.md and build/step35-investigation/result.json
+for detailed evidence, timing, hashes and limitations. SIMH comparison script
+now has explicit step35 coverage. HP remains at the physical step35 failure;
+installed images are still1557ca2... FPGA and5c509335... STM32.
+
 ### Physical retry: step34 PASSED; new halt at step35 missing READ overrun
 
 User restarted after the CHECK-DMA installation. Fresh H0 banner, then

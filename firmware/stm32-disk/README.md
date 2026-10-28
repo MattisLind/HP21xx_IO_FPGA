@@ -270,6 +270,13 @@ command arriving before it is serviced reports pending-command overrun.
 
 ## Verification and next hardware checks
 
+The step35 READ-overrun repair is in the FPGA: it remembers final READ DMA
+CLC and rejects a later STC before command completion. This preserves the
+20us normal software response window and prevents an extra image word from
+being staged. The STM32 CHECK-DMA firmware remains compatible without a code
+change. Overrun set by the FPGA may appear in HP status without a software
+`OV` trace event. See [the comparison and validation](../../diagnostics/hp13210/read-overrun.md).
+
 Host tests cover configuration errors and mapping, image geometry/byte order,
 ready/offline startup, POPIO availability refresh, independent seeks and abort,
 timer rollover, read/write handshakes, partial-sector filling, preservation of

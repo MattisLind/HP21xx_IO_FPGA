@@ -72,7 +72,13 @@ include polling/FSMC timing; they are not the physical HP's response times.
 These are bounded transfer tests, **not a full section1 or diagnostic pass**.
 Exploratory slower-CPU runs beyond this range stalled around REFINE/CHECK;
 their causes have not been resolved. The native backend additionally checks
-the READ-overrun behavior needed by step35; the CPU experiment stops before it.
+50us late READ requests; the original CPU acceptance cases stopped before35.
+The later [step35 comparison](read-overrun.md) finds that the diagnostic's
+shorter request is accepted within20us because the FPGA ignores final READ CLC.
+It compares SIMH and the original worker and tests a CLC-aware candidate.
+That fix is now prepared in production RTL, with successful CPU cases through
+step35 at200ns and8us polling, plus permanent pulse/completion regressions.
+The download bundle is under `build/step35-download/`; it is not installed.
 RTE-II has not been rerun with this timing model.
 
 ## Reproduce

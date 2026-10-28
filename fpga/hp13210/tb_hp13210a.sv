@@ -181,6 +181,30 @@ module tb_hp13210a;
   endtask
 
   logic [15:0] value;
+  task start_transfer(input logic [3:0] command);
+    hp_write(1,{command,12'h000}); pulse(4); pulse(1); pulse(3);
+    backend_read(16'h0000,value);
+    backend_read(16'h0002,value);
+    backend_read(16'h000c,value);
+    backend_write(16'h0004,16'h1234);
+    select_channel(0); pulse(2);
+  endtask
+
+  task final_read_clc;
+    ioi=1; clc=1; #(HP_PULSE_NS);
+    check(iob_in===16'h1234,"Final READ input remains valid with CLC");
+    ioi=0; clc=0; #191;
+  endtask
+
+  task check_overrun(input bit expected);
+    // Observe the HP status word; the status input also clears Overrun.
+    select_channel(0); pulse(3); pulse(1);
+    hp_write(1,16'h0000); pulse(4); pulse(1); pulse(3);
+    select_channel(0); pulse(2);
+    ioi=1; #(HP_PULSE_NS);
+    check(iob_in[13]===expected,"HP status Overrun matches READ termination");
+    ioi=0; #191;
+  endtask
   integer test_bit;
   integer seek_drive;
   reg [3:0] test_command;
@@ -496,6 +520,63 @@ module tb_hp13210a;
         select_channel(1); pulse(2); sfs=1; #157;
         check(skf===1,"Command completion flag preserved after data acknowledgement");
         sfs=0;
+      end
+    end
+
+    if (ENABLE_STM32) begin
+      // Run with every pulse/phase/backend variant, including completion
+      // during a held HP STC. No timing-window reduction is involved.
+      for (test_bit=0; test_bit<10; test_bit=test_bit+1) begin
+        reset=1; #199; reset=0; #211;
+        backend_write(16'h0000,16'h0100);
+        case (test_bit)
+          7: test_command=4'h6;
+          8: test_command=4'h1;
+          9: test_command=4'h9;
+          default: test_command=4'h2;
+        endcase
+        start_transfer(test_command);
+        if (test_bit==0) begin
+          pulse(3);
+          backend_read(16'h0000,value);
+          check(value[6]===1,"Normal READ continuation reaches backend");
+          backend_write(16'h0004,16'h1234);
+        end
+        if (test_bit!=3 && test_bit<8) final_read_clc();
+        if (test_bit==1) backend_write(16'h0006,16'h0000);
+        if (test_bit==4) pulse(8); // CRS
+        if (test_bit==5) pulse(7); // POPIO
+        if (test_bit==6) begin
+          reset=1; #199; reset=0; #211;
+          backend_write(16'h0000,16'h0100);
+        end
+        if (test_bit==2 || test_bit==3) begin
+          stc=1; #211;
+          backend_write(16'h0006,16'h0000);
+          #211; stc=0; #191;
+        end else if (test_bit>=8) begin
+          iob_out=16'hbeef; ioo=1; stc=1; clc=1;
+          #(HP_PULSE_NS); ioo=0; stc=0; clc=0; #191;
+        end else pulse(3);
+        backend_read(16'h0000,value);
+        if (test_bit==0 || test_bit==2) begin
+          check(value[6]===0,"STC after READ CLC is rejected through completion");
+          // A subsequent command clears termination, not just reset/POPIO.
+          if (test_bit==0) begin
+            backend_write(16'h000a,16'h0200);
+            start_transfer(4'h2); pulse(3);
+            backend_read(16'h0000,value);
+            check(value[6]===1,"New READ clears previous termination");
+          end
+        end else begin
+          if (value[6]!==1) $display("READ CLC test case %0d CSR=%04x",test_bit,value);
+          check(value[6]===1,"Valid or non-READ STC remains a request");
+        end
+        if (test_bit>=8) begin
+          backend_read(16'h0004,value);
+          check(value===16'hbeef,"WRITE/INIT final STC+CLC preserves the last word");
+        end
+        check_overrun(test_bit==2);
       end
     end
 

@@ -90,6 +90,8 @@ localparam [2:0] SEEK_IDLE = 3'd0,
   reg        command_channel_flag_buffer_ff;  
   reg        command_channel_control_ff;
   reg        data_channel_encode_ff;
+  reg        read_dma_ended;
+  reg        discard_read_stc;
   reg        command_channel_encode_ff;
   reg        irq_ff;
   reg        [1:0] drive_select_register; 
@@ -176,6 +178,9 @@ localparam [2:0] SEEK_IDLE = 3'd0,
   reg        command_is_seek_record;
   reg        command_is_refine_sector;
   reg        command_is_check_data;
+  wire late_read_request = read_dma_ended && command_is_read_data &&
+       command_channel_control_ff && !command_channel_flag_ff &&
+       !command_channel_flag_buffer_ff;
   reg        command_is_initalize_data;
   reg        command_is_address_record;
   reg        command_is_seek_record_or_address_record;
@@ -310,8 +315,8 @@ localparam [2:0] SEEK_IDLE = 3'd0,
 
     stm32_drq = 1'b0;
 
-    // CHECK accepts a sector count, then runs without HP data transfers.
-    // Reading that count still acknowledges CSR6, but must not request DMA.
+    // CHECK count consumption must not request stale DMA data. Optional
+    // CHECK DMA starts when the backend explicitly stages a DATA word.
     set_data_channel_flag_buffer = reset_data_channel_encode_ff |
       stm32_write_7900_data_negedge |
       (stm32_read_7900_data_negedge & ~command_is_check_data) |
@@ -369,6 +374,8 @@ localparam [2:0] SEEK_IDLE = 3'd0,
       seek_record_read_delayed <= 0;
       stm32_data_channel_irq_ff <= 0;
       data_channel_encode_ff <= 0;
+      read_dma_ended <= 0;
+      discard_read_stc <= 0;
       seek_state <= SEEK_IDLE;
       cylinder_address <= 0;
       reset_data_channel_encode_ff <= 0;
@@ -486,8 +493,26 @@ localparam [2:0] SEEK_IDLE = 3'd0,
         endcase
         if (backend_request && !request_push) overrun[drive_select_register] <= 1'b1;
 
+        // The final READ DMA input carries CLC instead of another STC.
+        // Preserve the software response margin for normal words, but reject
+        // a later STC while the command/sector is still completing (SIMH).
+        if (crs) begin
+          read_dma_ended <= 0;
+          discard_read_stc <= 0;
+        end else begin
+          if (command_channel_control_ff_posedge) read_dma_ended <= 0;
+          else if (clc && dsel && command_is_read_data &&
+                   command_channel_control_ff && !command_channel_flag_ff)
+            read_dma_ended <= 1;
+          // Classify once at the start of the HP pulse. Completion or a new
+          // command during a wide pulse must not turn a rejected request valid.
+          if (stc_data_channel_posedge) begin
+            discard_read_stc <= late_read_request;
+            if (late_read_request) overrun[drive_select_register] <= 1;
+          end else if (stc_data_channel_negedge) discard_read_stc <= 0;
+        end
         if (stm32_read_7900_data_negedge | stm32_write_7900_data_negedge) stm32_data_channel_irq_ff <= 1'b0;
-        else if (stc_data_channel_negedge) stm32_data_channel_irq_ff <= 1'b1;
+        else if (stc_data_channel_negedge && !discard_read_stc) stm32_data_channel_irq_ff <= 1'b1;
 
         if (crs | reset_data_channel_encode_ff) data_channel_encode_ff <= 1'b0;
         else if (stc_data_channel_posedge) data_channel_encode_ff <= 1'b1;

@@ -36,6 +36,8 @@ def run(out):
            ('normal-and-overrun-stall8',15,20,8000,33,120),
            ('normal-and-check',15,20,200,35,160),
            ('normal-and-check-stall8',15,20,8000,35,160),
+           ('read-overrun',15,20,200,36,160),
+           ('read-overrun-stall8',15,20,8000,36,160),
            ('normal-slower-cpu-stall8',31,20,8000,28,100),
            ('control-six-us',15,6,8000,28,40)]
     def case(settings):
