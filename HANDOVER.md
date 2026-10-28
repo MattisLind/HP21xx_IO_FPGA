@@ -6,6 +6,22 @@ bring-up state; some older README status paragraphs describe earlier stages.
 
 ## Current hardware and capture — 2026-10-28
 
+### Physical retry: step34 PASSED; new halt at step35 missing READ overrun
+
+User restarted after the CHECK-DMA installation. Fresh H0 banner, then
+H46 READ IN STEP35; E64 STATUS IS000000 SHOULD BE020001; H51 CYL0000
+HEAD01 SECTOR07 WORD COUNT0030 UNIT00. No step34/E13: the CHECK correction
+has physical evidence of passing step34. Full diagnostic still does NOT pass.
+
+Fresh STM32 status41commands/2errors (expected earlier seek E03/E02), dropped0,
+all4READY, lastcommand2000/RAR0027/CSR0040. READmax17us, WRITEmax3us.
+Trace CHECK/EC/CM advances to READ/TO/CM with no final OV event. Earlier
+step32 WRITE does report OV/ZF/CM. Step35 intentionally forces READ overrun;
+the missing020001 is the next issue. This capture alone does not establish
+why its late read request was not detected. No hardware/code changes made
+during this check. Preserve HP halt for investigation; both captures active.
+Evidence: build/check-step34/check-dma-update/retest/result.json and raw logs.
+
 ### CHECK optional DMA repair installed — ready for physical diagnostic retry
 
 User confirmed HP halted and authorized installation after validation. STM32

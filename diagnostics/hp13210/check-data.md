@@ -1,8 +1,15 @@
 # CHECK sector-count acknowledgement
 
-**Current status:** the optional CHECK DMA repair is installed on STM32;
-the rebuilt FPGA is loaded in SRAM. Physical diagnostic retry is pending.
+**Current status:** the optional CHECK DMA repair passed step34 on the HP.
+The fresh run now halts at step35: READ-overrun status000000, expected020001.
+The optional CHECK DMA repair is installed on STM32 and the rebuilt FPGA is in SRAM.
 The earlier claim that the diagnostic itself was defective was wrong.
+
+Physical evidence: `build/check-step34/check-dma-update/retest/`. A fresh H0
+banner is followed by step35/E64 at cylinder0/head1/sector7/count30, with no
+step34 error. STM32 reports41 commands, only the two expected seek errors,
+READ response maximum17us, WRITE3us, final READ/TO/CM without OV. No hardware
+changes during this check. Full diagnostic acceptance remains failed at35.
 
 ## Installed repair
 
