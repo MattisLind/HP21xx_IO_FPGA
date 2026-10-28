@@ -6,7 +6,25 @@ bring-up state; some older README status paragraphs describe earlier stages.
 
 ## Current hardware and capture — 2026-10-28
 
-### CHECK flag fix installed — awaiting hardware retest
+### CHECK flag fix installed — hardware now matches zero-word CPU failure
+
+User restarted atP2000/S0 after installation. NEW physical capture: H0 banner,
+H22 CYCLIC CHECK IN STEP34; E13 0000 WORDS TRANSFERRED0128 EXPECTED;
+H51 CYL0000 HEAD01 SECTOR21 WORD COUNT0128 UNIT00. This matches the CPU model.
+Phantom one-word DMA is gone, but step34 is NOT fixed. Fresh STM3240commands,
+2expected seek errors, READmax6us/WRITEmax3us, lastcmd6000/RAR0035/CSR0040.
+Trace final CK/EC/CM, no E64 status mismatch. No hardware changes this check.
+Evidence build/check-step34/install/retest/; aggregate hardware receipt updated.
+
+Source follow-up: step34 arms READ DMA128 specifically to detect CHECK opcode
+misdecode, outputs sector count50, issues CHECK6000, calls DMAT then STAT/WEND.
+DMAT checks command flag then DMA flag; incomplete DMA flows FTCX -> MC -> count
+read -> DMERQ/E13. Source revisions1432/1644/1805 all have this sequence, no
+explicit DMRFC in step34. Manual3-28/29 says CHECK performs no sector data
+transfer and signals command completion at EOC/count end. Remaining mismatch
+between diagnostic DMA-completion handling and emulated CHECK is unresolved;
+don't fabricate128 data transfers or patch diagnostic to force a pass. Need
+trace this path in the now hardware-matching CPU model. Both captures active.
 
 User explicitly requested installation. Production core now suppresses the
 STM32 DATA-read contribution to HP data flag for CHECK only. Permanent test

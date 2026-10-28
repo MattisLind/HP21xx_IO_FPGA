@@ -50,3 +50,9 @@ reports step34/E13 with **zero** words transferred. It has not passed step34.
 This remaining behavior needs investigation; the directed flag fix alone
 must not be presented as complete diagnostic acceptance. The firmware timing
 image is unchanged by this FPGA update.
+
+The subsequent physical run reproduces that same zero-word E13 at step34.
+STM32 again reports40 commands, two expected seek errors, response maxima
+READ6us/WRITE3us and final CHECK/EOC/completion. The unwanted transfer is gone,
+but the remaining CHECK/DMA-completion mismatch is unresolved. Hardware retest
+evidence is in `build/check-step34/install/retest/`.
