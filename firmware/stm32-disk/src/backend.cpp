@@ -31,6 +31,15 @@ void Backend::complete(bool attention_bit) {
   mark(Event::Complete);
   mode_=Idle;
 }
+void Backend::finish_check() {
+  // CHECK's sector count is independent of whether the HP accepts data.
+  // Exhausting DMA must not turn CHECK into an early-terminated READ.
+  if (check_eoc_) {
+    mark(Event::EndCylinder);
+    status(selected_,EndCylinder);
+  }
+  complete(false);
+}
 void Backend::media_error(Event event) {
   error(event);
   failed_[selected_]=true;
@@ -234,9 +243,9 @@ void Backend::step(uint32_t now) {
     drain(now,csr);
     return;
   }
-  if (mode_==ReadStart || mode_==WriteStart) {
+  if (mode_==ReadStart || mode_==WriteStart || mode_==CheckStart) {
     if (!expired(now,deadline_)) return;
-    mode_=mode_==ReadStart ? Read : Write;
+    mode_=mode_==ReadStart ? Read : mode_==CheckStart ? CheckRead : Write;
     deadline_+=WordTimeoutUs;
   }
   if (mode_==Write) {
@@ -261,28 +270,33 @@ void Backend::step(uint32_t now) {
   }
   if (mode_==CheckCount) {
     if (csr&0x40) {
-      // CHECK accepts one sector-count word, then proceeds without HP data
-      // transfers (13210A manual 3-28/29). Waiting for further STC pulses
-      // makes it time out before reaching the cylinder boundary.
+      // SIMH and the original Verilog worker offer data during CHECK when
+      // the HP arms DMA (DSN151302 step34). If handshakes stop, checking
+      // still continues through the requested sectors to count end/EOC.
       const unsigned sectors=bus_.read(Data)&63;
-      if (sectors*SectorBytes>length_) {
-        mark(Event::EndCylinder);
-        status(selected_,EndCylinder);
+      const unsigned requested=sectors*SectorBytes;
+      check_eoc_=requested>length_;
+      if (requested<length_) length_=requested;
+      if (!length_) { finish_check(); return; }
+      if (!images_.read(selected_,address_.offset(),buffer_,length_)) {
+        media_error(Event::ReadError); return;
       }
-      // Exactly the remaining sectors succeeds; only a request beyond them
-      // sets EOC. A zero-valued attention write still raises the command flag.
-      complete(false);
+      mode_=CheckStart;
+      deadline_=bus_.now_us(now)+transfer_start_us_;
     } else if (expired(now,deadline_)) {
       error(Event::CountTimeoutError); status(selected_,Overrun); complete(false);
     }
     return;
   }
-  // READ DATA: stage a word, then await the HP's next STC.
+  // READ/CHECK DATA: stage a word, then await the HP's next STC.
   if (read_wait_) {
     if (!(csr&0x40)) {
       if (expired(now,deadline_)) {
-        start_drain(false);
-        drain(now,csr);
+        if (mode_==CheckRead) finish_check();
+        else {
+          start_drain(false);
+          drain(now,csr);
+        }
       }
       return;
     }
@@ -290,8 +304,11 @@ void Backend::step(uint32_t now) {
     if (elapsed>longest_read_response_us_) longest_read_response_us_=elapsed;
     read_wait_=false;
     if (position_==length_) {
-      mark(Event::EndCylinder); status(selected_,EndCylinder);
-      complete();
+      if (mode_==CheckRead) finish_check();
+      else {
+        mark(Event::EndCylinder); status(selected_,EndCylinder);
+        complete();
+      }
       return;
     }
   }

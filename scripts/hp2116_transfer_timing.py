@@ -34,6 +34,8 @@ def run(out):
     checkpoint=ROOT/'build/hp2116-seek-validation/recovery/section1.hex'
     cases=[('normal-and-overrun',15,20,200,33,120),
            ('normal-and-overrun-stall8',15,20,8000,33,120),
+           ('normal-and-check',15,20,200,35,160),
+           ('normal-and-check-stall8',15,20,8000,35,160),
            ('normal-slower-cpu-stall8',31,20,8000,28,100),
            ('control-six-us',15,6,8000,28,40)]
     def case(settings):
@@ -54,7 +56,7 @@ def run(out):
             passed='TIMEOUT step=24 dir=W position=1\n' in text and 'LATE step=24 ' in text
         else:
             passed=f'PASS: transfer diagnostic through step {stop-1}' in text
-            if stop==33: passed=passed and 'LATE step=32 position=2 ' in text
+            if stop>=33: passed=passed and 'LATE step=32 position=2 ' in text
             passed=passed and 'FAIL:' not in text
         passed=passed and result.returncode==0
         print(f'{name}: {"PASS" if passed else "FAIL"}',flush=True)
@@ -220,11 +222,29 @@ endtask
     start = tb.index("          4'h6: begin",tb.index('task automatic stm32_read_cylinder'))
     end = tb.index("          4'h9: begin",start)
     tb = tb[:start]+'''          4'h6: begin
+            word_count=0; eoc_flag=0;
             stm32_get_seek_address();
             stm32_wait_csr_bit_set(6);
             stm32_fsmc_read16(STM32_REG_7900_DATA,indata);
-            if (int'(indata[5:0]) > ((2-int'(rar_head[0]))*24-int'(rar_sector)))
-              stm32_fsmc_write16(STM32_REG_7900_SET_STATUS,{selected_drive[1:0],STATUS_END_OF_CYLINDER});
+            num_sectors=indata[5:0];
+            got_word=1;
+            if (transfer_start_us>0 && num_sectors!=0) #(transfer_start_us*1us);
+            for (i=0; i<int'(num_sectors); i++) begin
+              if (eoc_flag) begin
+                stm32_fsmc_write16(STM32_REG_7900_SET_STATUS,{selected_drive[1:0],STATUS_END_OF_CYLINDER});
+                break;
+              end
+              for (j=0; j<128; j++) begin
+                if (got_word) begin
+                  indata={disk_image[selected_drive][disk_byte_offset(rar_cylinder,rar_head,rar_sector)+word_count*2+1],
+                          disk_image[selected_drive][disk_byte_offset(rar_cylinder,rar_head,rar_sector)+word_count*2]};
+                  stm32_fsmc_write16(STM32_REG_7900_DATA,indata);
+                  transfer_wait(transfer_response_us*1us,got_word);
+                end
+                // DMA exhaustion stops the optional stream, not CHECK.
+                calculate_rar("CHECK DATA");
+              end
+            end
             stm32_fsmc_write16(STM32_REG_7900_ATTENTION,16'h0000);
           end
 

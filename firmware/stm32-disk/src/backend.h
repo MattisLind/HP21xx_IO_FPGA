@@ -79,7 +79,8 @@ class Backend {
   // while still rejecting the diagnostic's ~50us deliberately late word.
   static constexpr uint32_t TransferStartUs=100, ResponseTimeoutUs=20;
  private:
-  enum Mode { Idle, ReadStart, WriteStart, Read, Write, CheckCount, ReadDrain, WriteDrain } mode_=Idle;
+  enum Mode { Idle, ReadStart, WriteStart, Read, Write, CheckCount,
+              CheckStart, CheckRead, ReadDrain, WriteDrain } mode_=Idle;
   struct Drive { unsigned cylinder=0; bool seeking=false; uint32_t deadline=0; } drive_[Drives];
   Bus &bus_;
   Images &images_;
@@ -92,7 +93,7 @@ class Backend {
   uint8_t seek_completion_valid_=0;
   Event last_error_=Event::Boot;
   bool pending_=false, read_wait_=false;
-  bool overrun_reported_=false;
+  bool overrun_reported_=false, check_eoc_=false;
   bool failed_[Drives] = {};
   unsigned selected_=0, command_=0, position_=0, length_=0;
   Address address_;
@@ -101,6 +102,7 @@ class Backend {
   void status(unsigned drive, uint16_t bits, bool set=true);
   void complete(bool attention_bit=true);
   void finish_write(bool check_overrun=true);
+  void finish_check();
   uint16_t poll();
   void discard_late(uint16_t csr);
   void start_drain(bool writing);

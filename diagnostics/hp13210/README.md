@@ -1,7 +1,9 @@
 # HP 13210 flag bring-up
 
-The [CHECK count acknowledgement fix](check-data.md) prevents an unwanted DMA
-request after the sector-count word, addressing the physical step34 E13.
+The [CHECK investigation](check-data.md) compares the step34 failure with SIMH
+and the original Verilog backend. SIMH passes the unmodified diagnostic;
+its CHECK path supports DMA when requested. That behavior is now implemented
+and installed on STM32; physical diagnostic retry is pending.
 
 The [disk transfer timing experiment](transfer-timing.md) examines the normal
 DMA and intentional-overrun paths after the physical step26 timing regression.

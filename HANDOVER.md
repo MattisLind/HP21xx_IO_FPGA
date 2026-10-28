@@ -6,6 +6,81 @@ bring-up state; some older README status paragraphs describe earlier stages.
 
 ## Current hardware and capture — 2026-10-28
 
+### CHECK optional DMA repair installed — ready for physical diagnostic retry
+
+User confirmed HP halted and authorized installation after validation. STM32
+now offers actual image words during CHECK when HP requests DMA; after DMA
+stops, CHECK still completes its count/EOC operation without Overrun. Count0
+remains a no-op; exact remaining sectors succeeds, exceeding them sets EOC.
+The100us data-start guard and20us response wait apply to the optional stream.
+Normal READ/WRITE/INIT and500us independent seek behavior are unchanged.
+
+Installed/verified ELF5c5093355bca40b0ded0a86a209554dcbd855b70b7281bb93a7872f1fd1f3e81
+(48256 flash bytes,22716 RAM). FPGA rebuilt and loaded into volatile SRAM:
+1557ca2fafc7f8e5ad8c1d8c4640e8ac14b6a3da533b59a6fad5da4f96a9a6bd.
+No functional RTL change was needed: existing CHECK count flag gating avoids
+stale DMA, and backend DATA writes already request valid CHECK DMA. Added
+permanent RTL coverage for this staged-data path. SPI flash was NOT written.
+
+All22 FPGA variants, board/LED tests, native actual-C++ ASan/UBSan suite and
+ARM build PASS. New CHECK tests fail against the old backend. Native tests
+cover no-DMA CHECK, actual data,128-word DMA/50-sector CHECK, partial/count-end
+transfers, EOC boundaries, media failure, pending SEEK and timer rollover.
+Updated CPU/SV timing model passes through step34 with200ns and8us polling;
+this is SV backend evidence, not execution of C++ inside the CPU model.
+ISE minimum period7.543ns, meeting50MHz. Diagnostic was not patched.
+
+STM32 halted throughout FPGA load/FSMC checks, then FPGA reloaded to clear
+test attention. Scratch/attention hardware readbacks PASS. Initial SWD backup
+failed before erase. Retry backed up/verified512KiB, but source guard stopped
+programming after a README edit. Refreshed build, then normal backup/verify/
+program/verify/reset succeeded. See build/stm32-disk/programmed.json for the
+verified512KiB backup and flash receipt. Built/programmed ELF hashes match.
+
+Fresh post-reset USB: FAT mounted, all4 READY, commands/errors/dropped0,
+CSR0000, seek-completion-valid0, startup100us/response20us. Both serial captures
+remain active. No HP inputs sent. Physical step34 acceptance is PENDING with
+this firmware; earlier physical failure was the previous image. Restart the
+already configured diagnostic normally at P002000/S000000, then RUN.
+Installation evidence/receipt: build/check-step34/check-dma-update/.
+
+### Independent SIMH comparison overturns diagnostic-bug conclusion
+
+User challenged the claim that step34 is a diagnostic bookkeeping defect and
+requested SIMH and original Verilog comparisons. The claim was wrong: both
+GitHub SIMH HP2100 release29 and the HP maintainer's supported release32 pass
+step34 with the same unmodified revision1805 diagnostic memory. Supported
+release32 also completes section1, halting normally atHLT102011 with S1000.
+CPU2116/32KW/EAU, 13210A SC22/23, disposable blank disks; startup P2000/S0
+for the step34 trace. At entry to step35 P004031, DMA CW3=0, flag1, DMRF0.
+At001542 SFC06 falls through to001543 (successful DMAT return), unlike our
+current CPU/SV model's failure branch. No diagnostic patch is needed.
+
+SIMH's CHECK worker shares its READ path and supplies data when the data
+channel requests it, while sector checking continues after DMA stops. The
+original hp2116_verilog/tb_hp2116.sv CHECK worker likewise stages words while
+handshakes continue, then advances through remaining sectors without waiting
+for more handshakes. Our current firmware/model completes after consuming only
+the count, which explains the incomplete DMA. Do not interpret the manual's
+normal no-data CHECK usage as requiring suppression of every optional DMA.
+
+Evidence: build/check-step34/simh/release32-retest.log, release32-debug.log,
+section1.log; source build/reference/hp2100-release32/SCP/HP2100/hp2100_dp.c.
+The literal original Verilog CPU/controller/backend replay currently fails
+earlier at step2/E21 under Verilator5.052; it is not a demonstrated full pass.
+A controlled replay restoring ONLY the original CHECK worker in the current
+production-RTL/timing harness PASSES through step34, entering35 at105.549ms.
+Evidence: build/check-step34/reference-check-worker/run.log. Earlier seek and
+transfer fixes remain in that controlled case. This isolates the CHECK backend
+as the relevant difference; CPU instruction execution need not be changed.
+scripts/hp13210_simh_compare.py repeats the independent supported-SIMH cases.
+Hardware, production firmware/RTL and diagnostic memory remain unchanged;
+physical acceptance still fails atstep34. The backend repair should preserve
+count/EOC progression without DMA while supporting optional data handshakes,
+as SIMH/reference do. Reverting only the FPGA flag gate yields one stale word
+with the present backend, not a working implementation. See
+diagnostics/hp13210/check-data.md.
+
 ### CHECK flag fix installed — hardware now matches zero-word CPU failure
 
 User restarted atP2000/S0 after installation. NEW physical capture: H0 banner,

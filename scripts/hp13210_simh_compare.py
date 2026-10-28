@@ -1,0 +1,96 @@
+#!/usr/bin/env python3
+"""Run the unpatched DSN151302 memory image on independent SIMH HP2100.
+
+The default executable is the HP maintainer's supported Release 32. Start at
+P2000 using the existing configured checkpoint, bypassing tape loading only.
+Uses four disposable disks. Checks step34 and section1, not the full diagnostic.
+"""
+import argparse
+import hashlib
+import json
+from pathlib import Path
+import subprocess
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def digest(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--simh', type=Path, default=ROOT/'build/reference/hp2100-release32/hp2100')
+    parser.add_argument('--memory', type=Path,
+                        default=ROOT/'build/hp2116-seek-validation/recovery/section1.hex')
+    parser.add_argument('--out', type=Path, default=ROOT/'build/check-step34/simh-confirmation')
+    args = parser.parse_args()
+    executable, checkpoint, out = args.simh.resolve(), args.memory.resolve(), args.out.resolve()
+    memory = [int(word, 16) for word in checkpoint.read_text().split()]
+    if len(memory) != 32768 or memory[0o126] != 0o151302:
+        parser.error('Expected the configured 32KW DSN151302 checkpoint')
+    if memory[0o4031] != 0o060334 or memory[0o1543] != 0o125513:
+        parser.error('Unexpected revision: breakpoint addresses must be rechecked')
+    out.mkdir(parents=True, exist_ok=True)
+    before = {'simh': digest(executable), 'memory': digest(checkpoint)}
+    results = []
+    for case in ('step34', 'section1'):
+        folder = out/case
+        folder.mkdir(exist_ok=True)
+        commands = ['set cpu 2116', 'set cpu 32K', 'set cpu EAU',
+                    'set cpu loaderenable', 'set tty sc=16', 'set tty 7b',
+                    'set tbg sc=13', 'set dpd enabled', 'set dpc enabled',
+                    'set dpc 13210A']
+        commands += [f'attach -n dpc{i} {folder}/scratch{i}.disc' for i in range(4)]
+        commands += ['reset']
+        commands += [f'deposit {address:o} {word:o}' for address, word in enumerate(memory)
+                     if address >= 2]
+        commands += ['deposit A 0', 'deposit B 0',
+                     'deposit S '+('0' if case == 'step34' else '1000')]
+        if case == 'step34':
+            commands += ['break 4013', 'go 2000', 'examine P,A,B,S',
+                         'examine dma1 cw1,cw2,cw3,flg,ctl',
+                         f'set debug {folder}/debug.log', 'set cpu debug=instr;reg',
+                         'set dpd debug=iobus', 'set dpc debug=iobus',
+                         'nobreak 4013', 'break 4031', 'continue']
+        else:
+            commands += ['go 2000']
+        commands += ['examine P,A,B,S', 'examine 156',
+                     'examine dma1 cw1,cw2,cw3,flg,ctl', 'show dpc', 'exit']
+        command_file = folder/'run.ini'
+        command_file.write_text('\n'.join(commands)+'\n')
+        with (folder/'console.log').open('w') as log:
+            result = subprocess.run([str(executable), str(command_file)], cwd=ROOT,
+                                    stdin=subprocess.DEVNULL, stdout=log,
+                                    stderr=subprocess.STDOUT, timeout=60)
+        console = (folder/'console.log').read_text()
+        passed = result.returncode == 0 and '156:\t000000' in console
+        entry = {'case': case, 'returncode': result.returncode}
+        if case == 'step34':
+            trace = (folder/'debug.log').read_text()
+            check = trace.split('>>DPC iobus: Received data 060000 with signals IOO', 1)[1]
+            check = check.split('>>DPC iobus: Received data 000000 with signals IOO', 1)[0]
+            transfers = sum(line.startswith('>>DPD iobus: Received') and 'IOI' in line
+                            for line in check.splitlines())
+            passed &= ('P:\t04031' in console and transfers == 128
+                       and '01543  125513' in trace and 'CW3:\t000000' in console)
+            entry['check_data_inputs'] = transfers
+        else:
+            passed &= '102011 (HLT 11)' in console and '102001 (HLT 1)' not in console
+        entry.update({'pass': bool(passed), 'console_sha256': digest(folder/'console.log'),
+                      'commands_sha256': digest(command_file)})
+        results.append(entry)
+        print(f'{case}: {"PASS" if passed else "FAIL"}')
+    unchanged = before == {'simh': digest(executable), 'memory': digest(checkpoint)}
+    receipt = {'sources': before, 'sources_unchanged': unchanged,
+               'diagnostic_patched': False, 'hardware_programmed': False,
+               'cpu': '2116, 32KW, EAU', 'controller': '13210A, SC22/23',
+               'start': 'P2000; configured memory checkpoint', 'results': results,
+               'full_diagnostic_pass': False}
+    (out/'result.json').write_text(json.dumps(receipt, indent=2)+'\n')
+    if not unchanged or not all(item['pass'] for item in results):
+        raise SystemExit('SIMH comparison failed; inspect evidence')
+
+
+if __name__ == '__main__':
+    main()

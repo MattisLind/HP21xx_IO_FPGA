@@ -446,8 +446,8 @@ module tb_hp13210a;
     end
 
     if (ENABLE_STM32) begin
-      // CHECK consumes one sector-count word without starting a disk-data
-      // stream. Its acknowledgement must release CSR6 without requesting DMA.
+      // CHECK consumes the count without requesting a stale DMA word.
+      // A subsequent backend DATA write explicitly starts optional CHECK DMA.
       // READ staging and WRITE/INITIALIZE consumption must still request it.
       for (test_bit=0; test_bit<4; test_bit=test_bit+1) begin
         case (test_bit)
@@ -479,6 +479,19 @@ module tb_hp13210a;
         else check(srq===1,"READ/WRITE/INITIALIZE still request next DMA word");
         backend_read(16'h0000,value);
         check(value[6]===0,"Backend data acknowledgement releases CSR6");
+        if (test_command==4'h6) begin
+          backend_write(16'h0004,16'h5ac3);
+          select_channel(0); pulse(2);
+          check(srq===1,"Staged CHECK data requests optional DMA");
+          ioi=1; #157;
+          check(iob_in===16'h5ac3,"CHECK DMA sees staged data, not the sector count");
+          ioi=0; pulse(1); pulse(3);
+          backend_read(16'h0000,value);
+          check(value[6]===1,"CHECK HP acceptance requests the next backend word");
+          backend_write(16'h0004,16'h36a9);
+          backend_read(16'h0000,value);
+          check(value[6]===0,"CHECK staging acknowledges the next-word request");
+        end
         backend_write(16'h0006,16'h0000);
         select_channel(1); pulse(2); sfs=1; #157;
         check(skf===1,"Command completion flag preserved after data acknowledgement");

@@ -5,6 +5,7 @@
 #include <vector>
 #include <string>
 #include <functional>
+#include <algorithm>
 
 struct Bus : hp::Bus {
   uint16_t csr=0, cmd=0, rar=0, word=0, attention=0, status[4]={};
@@ -39,19 +40,21 @@ struct Bus : hp::Bus {
 };
 struct Images : hp::Images {
   bool online[4]={true,true,false,false}, fail_read=false, fail_write=false;
-  std::vector<uint8_t> bytes[2] = {std::vector<uint8_t>(hp::ImageBytes,0x5a),
-                                  std::vector<uint8_t>(hp::ImageBytes,0xa5)};
+  std::vector<uint8_t> bytes[4] = {std::vector<uint8_t>(hp::ImageBytes,0x5a),
+                                  std::vector<uint8_t>(hp::ImageBytes,0xa5),
+                                  std::vector<uint8_t>(hp::ImageBytes,0x3c),
+                                  std::vector<uint8_t>(hp::ImageBytes,0xc3)};
   unsigned reads=0, writes=0, written=0;
   std::function<void()> during_write;
   bool ready(unsigned d) const override { return online[d]; }
   bool read(unsigned d,uint32_t off,uint8_t *p,unsigned size) override {
-    assert(d<2 && off+size<=hp::ImageBytes);
+    assert(d<4 && off+size<=hp::ImageBytes);
     ++reads;
     if (fail_read) return false;
     memcpy(p,bytes[d].data()+off,size); return true;
   }
   bool write(unsigned d,uint32_t off,const uint8_t *p,unsigned size) override {
-    assert(d<2 && off+size<=hp::ImageBytes);
+    assert(d<4 && off+size<=hp::ImageBytes);
     ++writes; written=size;
     if (during_write) during_write();
     if (fail_write) return false;
@@ -412,22 +415,23 @@ static void check_data_tests() {
     f.bus.attention_writes.clear();
     f.bus.output.clear();
     f.bus.consumed=0;
+    const unsigned reads=f.images.reads;
     take_trace(f.trace);
     f.bus.command(6,drive,address); f.engine.step(0);
     assert(f.engine.active() && (f.bus.status[drive]&hp::Busy));
     f.bus.input(count); f.engine.step(1);
-    // No more HP words or STC pulses. Even slow polling must not turn CHECK
-    // into a read timeout; it is an autonomous operation (manual 3-28/29).
+    // Offer the first data word, but no more HP STC pulses. CHECK still
+    // finishes the sector count/EOC operation without a READ timeout.
     for (unsigned i=0; i<4 && f.engine.active(); ++i)
       f.engine.step(1000+i*1000);
     assert(bool(f.bus.status[drive]&hp::EndCylinder)==eoc);
     assert(!f.engine.active() && !(f.bus.status[drive]&hp::Busy));
-    assert(f.bus.consumed==1 && f.bus.output.empty());
+    assert(f.bus.consumed==1 && f.bus.output.size()==((count&63) ? 1U : 0U));
     assert(f.bus.attention==8 && f.bus.attention_writes==std::vector<uint16_t>{0});
     const auto trace=take_trace(f.trace);
     assert(!contains(trace,"TO") && contains(trace,"CM"));
     assert(contains(trace,"EC")==eoc && f.engine.errors()==0);
-    assert(f.images.reads==0 && f.images.writes==0);
+    assert(f.images.reads==reads+((count&63) ? 1U : 0U) && f.images.writes==0);
   };
   // DSN151302 S1 step30: exactly 48 sectors fits; 49 attempts to cross EOC.
   check(0,{0,0,0},49,true);
@@ -442,6 +446,72 @@ static void check_data_tests() {
     }
   check(0,{0,0,0},0,false); // Preserve the model's zero-count no-op.
   check(0,{0,0,0},0xffc1,false); // Only the six count bits are significant.
+}
+static void check_dma_tests() {
+  auto run=[](hp::Address address, unsigned sectors, unsigned accepted,
+              bool eoc, uint32_t start) {
+    Fixture f(hp::Backend::TransferStartUs);
+    const unsigned words=std::min(sectors*hp::Words,address.remaining()/2);
+    assert(accepted<=words);
+    for (unsigned i=0; i<words; ++i) {
+      const uint16_t word=uint16_t(0x1234+i*17);
+      f.images.bytes[0][address.offset()+2*i]=uint8_t(word);
+      f.images.bytes[0][address.offset()+2*i+1]=uint8_t(word>>8);
+    }
+    f.bus.command(6,0,address); f.engine.step(start);
+    f.bus.input(uint16_t(sectors)); f.engine.step(start+1);
+    assert(f.engine.active() && f.bus.output.empty());
+    f.engine.step(start+hp::Backend::TransferStartUs);
+    assert(f.bus.output.empty());
+    uint32_t now=start+1+hp::Backend::TransferStartUs;
+    f.engine.step(now);
+    for (unsigned i=0; i<accepted; ++i) {
+      assert(f.engine.active() && f.bus.output.size()==i+1);
+      assert(f.bus.output[i]==uint16_t(0x1234+i*17));
+      f.bus.csr|=0x40; // HP accepts the staged word and requests the next.
+      now+=3; f.engine.step(now);
+    }
+    if (accepted<words) {
+      assert(f.engine.active());
+      f.engine.step(now+hp::Backend::ResponseTimeoutUs-1);
+      assert(f.engine.active());
+      f.engine.step(now+hp::Backend::ResponseTimeoutUs);
+    }
+    assert(!f.engine.active() && f.bus.consumed==1);
+    assert(f.bus.output.size()==std::min(accepted+1,words));
+    assert(bool(f.bus.status[0]&hp::EndCylinder)==eoc);
+    assert(!(f.bus.status[0]&(hp::Busy|hp::Overrun|hp::DataError)));
+    assert(f.bus.attention_writes==std::vector<uint16_t>{0});
+    assert(f.images.reads==1 && f.images.writes==0 && f.engine.errors()==0);
+    auto trace=take_trace(f.trace);
+    assert(!contains(trace,"TO") && !contains(trace,"OV"));
+    assert(contains(trace,"EC")==eoc);
+  };
+  // Step34: one sector of DMA, but CHECK must continue past the remaining
+  // three sectors to EOC. Also stop early, exhaust the count, and roll time.
+  run({0,1,21},50,128,true,0);
+  run({0,1,21},50,0,true,0);
+  run({0,0,7},2,30,false,0);
+  run({0,0,7},1,128,false,0);
+  run({0,3,23},2,128,true,0);
+  run({0,1,21},50,128,true,0xffffffb0U);
+  Fixture bad;
+  bad.images.fail_read=true;
+  bad.bus.command(6,0,{0,0,0}); bad.engine.step(0);
+  bad.bus.input(1); bad.engine.step(1);
+  assert(!bad.engine.active() && bad.engine.errors()==1);
+  assert((bad.bus.status[0]&(hp::DataError|hp::Unsafe|hp::NotReady))==
+         (hp::DataError|hp::Unsafe|hp::NotReady));
+  assert(bad.bus.output.empty());
+
+  Fixture pending;
+  pending.bus.command(6,0,{0,1,21}); pending.engine.step(0);
+  pending.bus.input(50); pending.engine.step(1); pending.engine.step(2);
+  pending.bus.command(3,1,{2,0,0}); pending.engine.step(3);
+  pending.engine.step(22); // No data acceptance: finish CHECK, keep SEEK packet.
+  pending.engine.step(23); pending.engine.step(23+hp::Backend::SeekTimeUs);
+  assert(pending.bus.attention==2 && pending.engine.commands()==2);
+  assert(pending.engine.errors()==0 && !pending.engine.active());
 }
 static void reset_and_boundary_tests() {
   Fixture f;
@@ -575,7 +645,7 @@ static void unsupported_command_tests() {
 int main() {
   static_assert(hp::ImageBytes==4988928);
   config_tests(); late_word_tests(); response_boundary_tests(); transfer_start_and_service_tests(); jittered_transfer_tests(); startup_seek_tests(); seek_geometry_tests(); seek_busy_recovery_tests(); read_tests(); write_tests();
-  end_cylinder_and_errors(); check_data_tests(); pending_and_check_tests();
+  end_cylinder_and_errors(); check_data_tests(); check_dma_tests(); pending_and_check_tests();
   reset_and_boundary_tests();
   trace_tests();
   unsupported_command_tests();
