@@ -109,7 +109,7 @@ Only the low four AD address bits are decoded; higher addresses alias.
 
 | Address | Read | Write |
 | --- | --- | --- |
-| `0x00` | CSR: command IRQ bit 7, data IRQ bit 6; end of read consumes one queued command if bit 7 was set | Command IRQ enable bit 8, data IRQ enable bit 9 |
+| `0x00` | CSR: command IRQ bit 7, data IRQ bit 6; read start takes one pending request and latches the returned IRQ bits | Command IRQ enable bit 8, data IRQ enable bit 9 |
 | `0x02` | Command in bits 15:12, protected/defective cylinder in 9:8, live seek-aborted mask in 5:2, drive in 1:0; after CSR consumption, command fields belong to that packet | No state change |
 | `0x04` | HP-to-drive word; end of read acknowledges data IRQ and advances handshake | Drive-to-HP word and data handshake |
 | `0x06` | Four-bit attention mask | OR bits 3:0 into attention; triggers reference command-flag handshake |
@@ -130,7 +130,7 @@ layout; it is not the status-write mask. Firmware interrupts still need their
 enables written explicitly.
 
 SEEK address acceptance acknowledges the data channel, marks the drive busy,
-and queues backend service. It does not raise the HP command flag. The backend
+and records per-drive pending backend service. It does not raise the HP command flag. The backend
 attention write raises that flag at completion. ADDRESS RECORD retains immediate
 completion. STATUS preserves seek attention, commands select their own drive
 for attention-suppression handling, and CRS suppresses attention for all
@@ -138,14 +138,18 @@ outstanding drives. The internal `seek_aborted` mask suppresses completion
 attention only: CLC/CRS do not cancel drive positioning. The backend worker
 continues to the target cylinder and clears Busy when positioning finishes.
 
-Eight command/RAR packets are retained in order, so later STATUS or SEEK words
-cannot replace a pending backend request. Read CSR, then COMMAND, then RAR for
-each packet; the existing STM32 backend already follows this sequence. Until
-RAR is read, COMMAND/RAR expose that packet; subsequent reads expose live state.
-The abort mask always remains live. Queue overflow sets the selected drive's
-overrun status and preserves the eight accepted packets. IRQ remains asserted
-while more packets await CSR consumption; consumers must drain it, not wait for
-it to fall after consuming only one packet.
+Each drive retains one pending SEEK destination, while one separate slot holds
+an ordinary controller command. Read CSR, COMMAND, then RAR; the STM32 backend
+already follows this sequence. CSR takes the selected request and latches its
+IRQ bits together at read start, so a new request or CLC during the read cannot
+change the packet being returned. Pending seeks drain by drive number, followed
+by the ordinary command. Until RAR is read, COMMAND/RAR expose that snapshot;
+subsequent reads expose live state. The abort mask always remains live.
+
+A second SEEK to a busy drive sets Seek Check and retains the original
+positioning operation. CLC/CRS cancel an ordinary command not yet taken by the
+MCU but retain accepted seeks. IRQ reflects the remaining slots; consumers
+continue polling rather than waiting for a low level between requests.
 
 ## Verification and build
 
@@ -313,3 +317,11 @@ reload from flash was requested successfully. The receipt is
 that the new 100 ms / two-second idle pattern returns after power cycling;
 persistent boot of this revision is accepted.
 See [outstanding questions](../../requirements/OUTSTANDING_QUESTIONS.md).
+
+## Experimental request capture
+
+On `fpga-rework-experimental`, the eight-entry command FIFO is replaced by
+one SEEK destination per drive and one ordinary-command slot. See
+[the design and validation](../../diagnostics/hp13210/seek-mailboxes.md) for
+priority, busy-SEEK, CLC cancellation, resource comparison and acceptance limits.
+The `working` tag retains the FIFO implementation and passed hardware image.

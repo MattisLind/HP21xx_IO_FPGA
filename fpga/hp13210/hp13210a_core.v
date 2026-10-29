@@ -118,17 +118,23 @@ localparam [2:0] SEEK_IDLE = 3'd0,
   reg        stm32_data_access;
   reg        stm32_status_access;
   reg        stm32_read_csr;
+  reg [1:0] csr_read_flags;
   reg        stm32_write_csr;
-  // Preserve backend requests independently of later HP STATUS/SEEK words.
-  // CSR acknowledges one entry; COMMAND and RAR then expose that same entry.
-  reg [15:0] request_commands [0:7];
-  reg [15:0] request_addresses [0:7];
-  reg [2:0] request_head, request_tail;
-  reg [3:0] request_count;
+  // Drives accept seeks independently; retain one destination per drive until
+  // the MCU takes it. Ordinary controller operations use one separate slot.
+  reg [14:0] seek_addresses [0:3];
+  reg [3:0] seek_pending;
+  reg command_pending;
+  reg [15:0] pending_command;
+  reg [14:0] pending_address;
+  reg seek_was_busy;
+  wire [1:0] pending_drive = seek_pending[0] ? 2'd0 :
+      seek_pending[1] ? 2'd1 : seek_pending[2] ? 2'd2 : 2'd3;
+  wire pending_seek = |seek_pending;
   reg [15:0] captured_command, captured_address;
   reg captured_request_valid;
   reg seek_request_delayed, seek_record_read_delayed;
-  wire stm32_irq_ff = (request_count != 0);
+  wire stm32_irq_ff = pending_seek | command_pending;
   reg        stm32_data_channel_irq_ff;
   reg        stm32_data_channel_irq_enable;
   reg        stm32_7900_command_status_access;
@@ -194,8 +200,10 @@ localparam [2:0] SEEK_IDLE = 3'd0,
   wire backend_request = (command_is_seek_record & set_irq_ff & ~seek_request_delayed) |
        ((command_is_write_data | command_is_read_data | command_is_refine_sector |
          command_is_check_data | command_is_initalize_data) & command_channel_control_ff_posedge);
-  wire request_pop = stm32_read_csr_negedge & (request_count != 0);
-  wire request_push = backend_request & ((request_count < 8) | request_pop);
+  // Take the packet and latch the returned IRQ bits at the same read-start
+  // edge. CLC or a new request during the read cannot change its identity.
+  wire csr_read_start = stm32_read_csr & ~stm32_read_csr_registered;
+  wire request_pop = csr_read_start & stm32_irq_ff;
 
   localparam [3:0] STM32_REG_CSR                     = 4'h0;
   localparam [3:0] STM32_REG_7900_COMMAND_STATUS     = 4'h2;
@@ -400,9 +408,12 @@ localparam [2:0] SEEK_IDLE = 3'd0,
       stm32_read_csr_delayed <= 0;
       seeking <= 0;
       command_channel_control_ff_delayed <= 0;
-      request_head <= 0;
-      request_tail <= 0;
-      request_count <= 0;
+      seek_pending <= 0;
+      command_pending <= 0;
+      pending_command <= 0;
+      pending_address <= 0;
+      seek_was_busy <= 0;
+      csr_read_flags <= 0;
       captured_command <= 0;
       captured_address <= 0;
       captured_request_valid <= 0;
@@ -509,25 +520,39 @@ localparam [2:0] SEEK_IDLE = 3'd0,
         seek_record_read_delayed <= stm32_read_7900_seek_record;
         if (seek_record_read_delayed && !stm32_read_7900_seek_record)
           captured_request_valid <= 1'b0;
-        if (request_push) begin
-          request_commands[request_tail] <= {command_register, 2'b00,
-              protected_cylinder_register, defective_cylinder_register,
-              2'b00, seek_aborted, drive_select_register};
-          request_addresses[request_tail] <= {1'b0, cylinder_address, head_address, sector_address};
-          request_tail <= request_tail + 1'b1;
-        end
+        if (csr_read_start)
+          csr_read_flags <= {stm32_irq_ff, stm32_data_channel_irq_ff};
         if (request_pop) begin
-          captured_command <= request_commands[request_head];
-          captured_address <= request_addresses[request_head];
+          if (pending_seek) begin
+            captured_command <= {4'h3, 10'b0, pending_drive};
+            captured_address <= {1'b0, seek_addresses[pending_drive]};
+            seek_pending[pending_drive] <= 1'b0;
+          end else begin
+            captured_command <= pending_command;
+            captured_address <= {1'b0, pending_address};
+            command_pending <= 1'b0;
+          end
           captured_request_valid <= 1'b1;
-          request_head <= request_head + 1'b1;
         end
-        case ({request_push, request_pop})
-          2'b10: request_count <= request_count + 1'b1;
-          2'b01: request_count <= request_count - 1'b1;
-          default: ;
-        endcase
-        if (backend_request && !request_push) overrun[drive_select_register] <= 1'b1;
+        // CLC cancels an ordinary command not yet taken by the MCU. A
+        // drive's accepted seek survives CLC/CRS and only loses attention.
+        if ((clc && csel) || crs) command_pending <= 1'b0;
+        if (backend_request) begin
+          if (command_is_seek_record) begin
+            // A second SEEK selects the new head/sector in the live RAR,
+            // but cannot change the drive's original positioning operation.
+            if (!seek_was_busy) begin
+              seek_addresses[drive_select_register] <= {cylinder_address, head_address, sector_address};
+              seek_pending[drive_select_register] <= 1'b1;
+            end
+          end else begin
+            pending_command <= {command_register, 2'b00,
+                protected_cylinder_register, defective_cylinder_register,
+                2'b00, seek_aborted, drive_select_register};
+            pending_address <= {cylinder_address, head_address, sector_address};
+            command_pending <= 1'b1;
+          end
+        end
 
         // The final READ DMA input carries CLC instead of another STC.
         // Preserve the software response margin for normal words, but reject
@@ -598,7 +623,11 @@ localparam [2:0] SEEK_IDLE = 3'd0,
                 set_irq_ff <= 1'b1;
                 // Positioning starts when the final address word is accepted
                 // (13210A manual 3-45), even if backend polling is delayed.
-                if (command_is_seek_record) drive_busy[drive_select_register] <= 1'b1;
+                if (command_is_seek_record) begin
+                  seek_was_busy <= drive_busy[drive_select_register];
+                  if (!drive_busy[drive_select_register]) seek_check[drive_select_register] <= 1'b0;
+                  drive_busy[drive_select_register] <= 1'b1;
+                end
                 seek_state <= SEEK_GOT_SECOND_WORD;
               end
             end
@@ -640,7 +669,11 @@ localparam [2:0] SEEK_IDLE = 3'd0,
           if (fsmc_write_data[3]) address_error[fsmc_write_data[15:14]] <= 1'b0;
           if (fsmc_write_data[4]) end_of_cylinder[fsmc_write_data[15:14]] <= 1'b0;
           if (fsmc_write_data[5]) not_ready[fsmc_write_data[15:14]] <= 1'b0;
-          if (fsmc_write_data[6]) seek_check[fsmc_write_data[15:14]] <= 1'b0;
+          // A valid SEEK clears Seek Check when accepted above. Do not let
+          // its delayed MCU clear erase a newer busy-SEEK error. Clearing
+          // Busy too (including initialization) may clear both status bits.
+          if (fsmc_write_data[6] && (!drive_busy[fsmc_write_data[15:14]] || fsmc_write_data[1]))
+            seek_check[fsmc_write_data[15:14]] <= 1'b0;
           if (fsmc_write_data[7]) data_protect[fsmc_write_data[15:14]] <= 1'b0;
           if (fsmc_write_data[8]) drive_unsafe[fsmc_write_data[15:14]] <= 1'b0;
           if (fsmc_write_data[9]) overrun[fsmc_write_data[15:14]] <= 1'b0;
@@ -648,6 +681,10 @@ localparam [2:0] SEEK_IDLE = 3'd0,
           if (fsmc_write_data[11]) seeking[fsmc_write_data[15:14]] <= 1'b0;
           if (fsmc_write_data[12]) seek_aborted[fsmc_write_data[15:14]] <= 1'b0;
         end
+
+        // Busy-SEEK wins over a simultaneous older backend status clear.
+        if (backend_request && command_is_seek_record && seek_was_busy)
+          seek_check[drive_select_register] <= 1'b1;
 
         stm32_read_7900_data_registered <= stm32_read_7900_data;
         stm32_read_7900_data_delayed <=  stm32_read_7900_data_registered;
@@ -713,7 +750,8 @@ localparam [2:0] SEEK_IDLE = 3'd0,
     case (address_register)
       STM32_REG_TEST: stm32_fsmc_ad_out = test_register;
       STM32_REG_CSR:
-        stm32_fsmc_ad_out = {8'h00, stm32_irq_ff, stm32_data_channel_irq_ff, 6'h00};
+        stm32_fsmc_ad_out = (stm32_read_csr || stm32_read_csr_registered) ?
+          {8'h00, csr_read_flags, 6'h00} : {8'h00, stm32_irq_ff, stm32_data_channel_irq_ff, 6'h00};
       STM32_REG_7900_COMMAND_STATUS:
         stm32_fsmc_ad_out = captured_request_valid ?
           {captured_command[15:6], seek_aborted, captured_command[1:0]} :

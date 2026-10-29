@@ -25,8 +25,9 @@ and installed on STM32; physical diagnostic retry is pending.
 The [disk transfer timing experiment](transfer-timing.md) examines the normal
 DMA and intentional-overrun paths after the physical step26 timing regression.
 
-The [SEEK correction and validation](seek-validation.md) describes the current
-production RTL, its request queue, and the diagnostic seek regression coverage.
+The [SEEK correction and validation](seek-validation.md) describes the tagged
+working FIFO design. The [per-drive slot experiment](seek-mailboxes.md) replaces
+that queue and records its validation and resource comparison.
 
 The [RTE-II boot regression](rte-boot.md) boots the original disk image with
 the production controller, starts FMGR, and checks `DL` and return to its

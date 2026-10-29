@@ -433,17 +433,99 @@ module tb_hp13210a;
             "After packet consumption, command/status reads return live state");
 
       pulse(7);
-      for (seek_drive=0; seek_drive<8; seek_drive=seek_drive+1)
-        record_command(4'h3, 0, 8'd10+seek_drive, 0);
-      check(dut.core.request_count === 8, "Request queue holds eight packets");
-      record_command(4'h3, 0, 8'd99, 0);
-      check(dut.core.overrun[0] === 1, "Queue overflow reports overrun without overwriting old packets");
-      for (seek_drive=0; seek_drive<8; seek_drive=seek_drive+1) begin
-        backend_read(16'h0000, value);
-        backend_read(16'h0002, value);
-        backend_read(16'h000c, value);
-        check(value == ((10+seek_drive) << 7), "Queue overflow preserves accepted request order");
+      record_command(4'h3, 0, 8'd10, 0);
+      record_command(4'h3, 0, 8'd99, 10'h117);
+      check(dut.core.seek_pending === 4'b0001,
+            "Busy SEEK retains one original request per drive");
+      check(dut.core.seek_check[0] === 1,
+            "Second SEEK to busy drive reports Seek Check");
+      backend_read(16'h0000, value);
+      backend_read(16'h0002, value);
+      backend_read(16'h000c, value);
+      check(value == (10 << 7), "Busy SEEK cannot replace original destination");
+      backend_read(16'h0000, value);
+      check(value[7] === 0, "Busy SEEK does not queue a second positioning operation");
+      backend_write(16'h000a,16'h0040);
+      check(dut.core.seek_check[0]===1,
+            "Delayed backend clear must preserve newer busy-SEEK error");
+      backend_write(16'h000a,16'h0802);
+      record_command(4'h3,0,8'd11,0);
+      check(dut.core.seek_check[0]===0,"Next valid SEEK clears previous Seek Check");
+      backend_read(16'h0000,value);
+      backend_read(16'h0002,value);
+      backend_read(16'h000c,value);
+      check(value==(11<<7),"Consumed seek slot can accept a new destination");
+
+      pulse(7);
+      // Drive slots are independent, not a FIFO: reverse arrival order.
+      for (seek_drive=3;seek_drive>=0;seek_drive=seek_drive-1)
+        record_command(4'h3,seek_drive[1:0],8'd20+seek_drive,0);
+      record_command(4'hb,2,8'd37,10'h117);
+      hp_write(1,16'h2002);pulse(4);pulse(1);pulse(3);
+      check(dut.core.command_pending===1,"Data command has a separate pending slot");
+      hp_write(1,16'h0001); // Change live command without aborting pending operation.
+      for (seek_drive=0;seek_drive<4;seek_drive=seek_drive+1) begin
+        backend_read(16'h0000,value);
+        check(value[7]===1,"Each independent seek slot requests service");
+        backend_read(16'h0002,value);
+        check(value[15:12]===3 && value[1:0]===seek_drive[1:0],
+              "Seek slots drain by drive priority rather than arrival order");
+        backend_read(16'h000c,value);
+        check(value==((20+seek_drive)<<7),"Each drive retains its own destination");
       end
+      backend_read(16'h0000,value);
+      backend_read(16'h0002,value);
+      check(value[15:12]===2 && value[1:0]===2,
+            "Ordinary command survives concurrent seek slots and later STATUS");
+      backend_read(16'h000c,value);
+      check(value==((37<<7)|(1<<5)|23),"Ordinary command retains its own RAR");
+      backend_read(16'h0000,value);
+      check(value[7]===0,"All five slots consumed exactly once");
+
+      pulse(7);
+      record_command(4'h3,1,8'd29,0);
+      hp_write(1,16'h2000);pulse(4);pulse(1);pulse(3);
+      check(dut.core.command_pending===1,"Unserviced READ is pending");
+      pulse(4);
+      check(dut.core.command_pending===0,"CLC cancels an unserviced ordinary command");
+      check(dut.core.seek_pending===4'b0010,"CLC preserves accepted drive seek");
+      hp_write(1,16'h1000);pulse(1);pulse(3);
+      check(dut.core.command_pending===1,"Replacement command uses the ordinary slot");
+      backend_read(16'h0000,value);backend_read(16'h0002,value);
+      check(value[15:12]===3 && value[1:0]===1,"Accepted seek is delivered after CLC");
+      backend_read(16'h000c,value);
+      backend_read(16'h0000,value);backend_read(16'h0002,value);
+      check(value[15:12]===1,"Cancelled READ is replaced by the new WRITE");
+      backend_read(16'h000c,value);
+      backend_read(16'h0000,value);
+      check(value[7]===0,"Cancelled operation never reaches backend");
+
+      pulse(7);
+      hp_write(1,16'h2000);pulse(4);pulse(1);pulse(3);
+      address_phase(16'h0000);host_oe=0;#177;stm32_fsmc_noe=0;#100;
+      pulse(4); // Abort after CSR has started taking the request.
+      check(stm32_fsmc_ad[7]===1,"In-flight CSR retains its acknowledged IRQ bit across CLC");
+      stm32_fsmc_noe=1;#179;stm32_fsmc_ne=OMIT_NE ? 0 : 1;#183;
+      backend_read(16'h0002,value);
+      check(value[15:12]===2,"In-flight CSR keeps the matching command snapshot");
+      backend_read(16'h000c,value);
+      backend_read(16'h0000,value);
+      check(value[7]===0,"Already taken ordinary request is not delivered twice");
+
+      pulse(7);
+      address_phase(16'h0000);host_oe=0;#177;stm32_fsmc_noe=0;#100;
+      // A request arriving during an initially empty poll belongs to the next poll.
+      hp_write(1,16'h2000);pulse(4);pulse(1);pulse(3);
+      check(stm32_fsmc_ad[7]===0,"CSR read remains empty when a request arrives mid-read");
+      stm32_fsmc_noe=1;#179;stm32_fsmc_ne=OMIT_NE ? 0 : 1;#183;
+      backend_read(16'h0000,value);
+      check(value[7]===1,"Mid-read arrival is retained for the next CSR poll");
+      backend_read(16'h0002,value);
+      check(value[15:12]===2,"Next CSR poll captures the newly arrived command");
+      backend_read(16'h000c,value);
+
+
+
 
       pulse(7);
       hp_write(0, 16'd7); pulse(3);

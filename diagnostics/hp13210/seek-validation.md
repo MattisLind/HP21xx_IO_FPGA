@@ -1,5 +1,8 @@
 # SEEK completion correction and validation
 
+This describes the FIFO implementation retained by the `working` tag. The
+experimental branch replaces request delivery with [per-drive seek slots](seek-mailboxes.md).
+
 The controller now requests backend service when a SEEK address is accepted,
 and raises the HP command flag when the backend writes completion attention.
 ADDRESS RECORD still completes immediately after address acceptance.

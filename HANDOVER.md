@@ -6,6 +6,35 @@ bring-up state; some older README status paragraphs describe earlier stages.
 
 ## Current hardware and capture — 2026-10-29
 
+### Experimental per-drive request slots; hardware remains at working tag
+
+User committed stable result as d6b9a8d and tagged `working`. HP log confirms
+LONG PASS0001..0004, each0000errors, unit00 heads0/1; user then requested an
+orderly stop with S100000. HLT102004 at001433, P001434, A100000 matches ENDST.
+Stable loaded FPGA remains f3be9b... and STM32 ELF f006ce15... (4MHz SDIO).
+No hardware access or programming during this request-capture experiment.
+
+Active software branch fpga-rework-experimental replaces the8-entry FIFO
+with one SEEK destination per drive plus one ordinary-command slot. No head,
+tail, occupancy, or FIFO overflow. Busy-SEEK sets SeekCheck without replacing
+original destination. CLC/CRS drop an unconsumed ordinary command; accepted
+seeks survive and retain live attention suppression. CSR latches selected
+packet plus returned IRQ bits atomically at read START, avoiding CLC/new-arrival
+races during the read. Same STM32 register sequence, no firmware changes.
+See diagnostics/hp13210/seek-mailboxes.md. RTL/TB/docs retained on the experimental branch.
+
+All22 controller timing variants PASS including new race/abort/multi-drive
+tests. Final board/LED build, all eight CPU seek/read replays and both RTE-II boot/FMGR
+regressions PASS. Final bitstream b19233751b4501c24df062d1f8ee6b5ee5a651f0ed7983794017609db39d1810,
+minimumperiod7.435ns, zero timingerrors. Mapped resources baseline->candidate:
+392->395registers,449->453LUTs,191->190occupiedslices,32->24memoryLUTs.
+No significant area reduction; architecture no longer has a command FIFO.
+Package build/queue-review/seek-mailboxes-ready.zip; experiment.json records
+source hashes/results. Candidate NOT downloaded, full HP diagnostic PENDING. Artifacts build/queue-review/;
+ISE baseline build/queue-baseline-board, final build/queue-mailboxes-v3-board.
+Do not program anything based on old handover pending-run entries below.
+
+
 ### 4MHz SDIO firmware INSTALLED; fresh diagnostic requested
 
 New STM32 ELF f006ce156f847832dc0579f44e8468944e20016752aeaf51f87d0a97e11aae8e
