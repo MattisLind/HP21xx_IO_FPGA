@@ -6,7 +6,28 @@ bring-up state; some older README status paragraphs describe earlier stages.
 
 ## Current hardware and capture — 2026-10-29
 
-### Experimental per-drive request slots; hardware remains at working tag
+### Experimental mailbox FPGA INSTALLED; fresh diagnostic pending
+
+Branch fpga-rework-experimental, commit7d59ce5. User authorized programming
+and another normal diagnostic. Installed SRAM FPGA
+b19233751b4501c24df062d1f8ee6b5ee5a651f0ed7983794017609db39d1810
+from build/queue-review/ready/controller-mailboxes.bit. STM32 existing4MHz SDIO
+BIN verified before and after; no rewrite needed, ELF remains f006ce15... .
+STM halted/load/FSMC scratch+attention checks/reload clean/BINverify/reset/run
+PASS. FAT mounted/all4READY, commands/errors/dropped0, CSR/request0. NoSPIwrites.
+Serial capture5994 and temporary sleep/idle inhibitors34596/38734 active.
+User should freshly run P002000/S000000 RUN, halt on error; acceptance PENDING.
+Receipt build/queue-review/installed.json and experimental-*.log/status files.
+
+IMPORTANT: this candidate is UNINSTRUMENTED, four-bit FSMC address decode.
+Do NOT use old counter/target/loss-recorder/sdio4 trace scripts or high debug
+bank accesses. On failure first preserve console and dump backend/full MCU
+SRAM only using build/queue-review/capture-experimental-failure.tcl; save stdout
+experimental-run-capture.log. It halts STM32 and leaves it halted, no FSMC reads.
+Original stable f3be9b... recorder bit retained under
+build/step47-investigation/address-qualified-ready/controller.bit for rollback.
+
+### Experimental per-drive request slots; prior software-only validation
 
 User committed stable result as d6b9a8d and tagged `working`. HP log confirms
 LONG PASS0001..0004, each0000errors, unit00 heads0/1; user then requested an
@@ -30,7 +51,7 @@ minimumperiod7.435ns, zero timingerrors. Mapped resources baseline->candidate:
 392->395registers,449->453LUTs,191->190occupiedslices,32->24memoryLUTs.
 No significant area reduction; architecture no longer has a command FIFO.
 Package build/queue-review/seek-mailboxes-ready.zip; experiment.json records
-source hashes/results. Candidate NOT downloaded, full HP diagnostic PENDING. Artifacts build/queue-review/;
+source hashes/results. Candidate subsequently downloaded as detailed in latest section; full HP diagnostic PENDING. Artifacts build/queue-review/;
 ISE baseline build/queue-baseline-board, final build/queue-mailboxes-v3-board.
 Do not program anything based on old handover pending-run entries below.
 
