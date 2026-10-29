@@ -6,7 +6,44 @@ bring-up state; some older README status paragraphs describe earlier stages.
 
 ## Current hardware and capture — 2026-10-29
 
-### Address-phase fix INSTALLED; fresh manual diagnostic pending
+### 4MHz SDIO firmware INSTALLED; fresh diagnostic requested
+
+New STM32 ELF f006ce156f847832dc0579f44e8468944e20016752aeaf51f87d0a97e11aae8e
+installed, verified, reset/run; backup512KiB verified via stm32_disk.py program.
+Prepared ELF/BIN/receipts build/step47-investigation/sdio4-ready/. New firmware
+sets SD_CLK_DIV=10U (4MHz) for polling SDIO FIFO margin; native ASan/UBSan tests
+PASS. Actual SDIO CLKCR0000090A verified. IMPORTANT: old step46 readyBIN is now
+obsolete for verification/reload; use sdio4-ready/disk_backend.bin. No SPIwrites.
+
+Same fixed recorder FPGA f3be9b71740e1f1851f6a9fb34d0bb1db6415d057645c5517d6a1426f3053033
+reloaded intoSRAM, FSMC PASS, reloaded clean, newSTM BIN verify/reset/run PASS.
+FAT mounted/all4READY, commands/errors/dropped0, CSR/request0. User asked for
+fresh P002000/S000000 RUN, halt at failure and Done; result PENDING.
+Captures20261029T062605Z and temporary inhibitors34596/38734 remain active.
+AfterDone copy read-address-qualified-trace.tcl, change output backend filename
+to sdio4-run-backend-sram.bin, save stdout sdio4-run-trace.log. Use WITHOUT RESET.
+Preserve latest HP text, SRAM and HAL SD error if any; script leaves STM halted.
+
+### Address glitch fixed physically; prior SD write underrun at cylinder66
+
+Latest Done: step46 WRITE E64 STATUS004103 expected000000, CYL0066 HEAD01
+SECTOR16 WORDCOUNT1024 UNIT0. Earlier short-READ failure cleared: retained
+READ commits/events/HPinputs1024, histogram DATA4=1024, F=0. Frozen stateC085
+captures ignored NADV glitch. Backend reached8111commands, errors4; last_error
+E08 WriteError, failed/online drive0=1/0. SD HAL error0x10=TX FIFO underrun;
+FIL.err0, fptr1634304. SD default24MHz polling driver sharesCPU with interrupts.
+Evidence address-qualified-run-{trace.log,trace.csv,hp.txt,backend-sram.bin},
+cyl66-full-sram.bin, storage-layout.txt, cyl66-state.log.
+
+SRAM-only targeted SD test changed CLKCR divider10 to4MHz, preserved original
+2048bytes at fileoffset1632256, rewrote identical bytes1024times withsync and
+readback verification. PASS1024, stage/error0, CLKCR90A, HALerror0. Full SRAM
+backup before-sd-stress-sram.bin. STM32 currently HALTED at RAM test BKPT.
+FPGA f3be9b... retained. Firmware CMake SD_CLK_DIV=10U built/programmed/verified; native backendtests PASS.
+All later setup described in latest section above.
+Captures and temporary sleep/idle inhibitors remain active.
+
+### Address-phase fix installed; prior manual request completed
 
 SRAM FPGAf3be9b71740e1f1851f6a9fb34d0bb1db6415d057645c5517d6a1426f3053033
 installed from build/step47-instrumented-board/controller.bit; snapshot

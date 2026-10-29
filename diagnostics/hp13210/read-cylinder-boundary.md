@@ -1,5 +1,21 @@
 # Step47 READ investigation
 
+## Physical READ loss cleared; subsequent SDIO write underrun
+
+With the address-qualified FPGA f3be9b..., the retained READ has1024 DATA
+commits/events/HPinputs and zero addressF writes. The normal diagnostic later
+stops at step46 WRITE, cylinder66/head1/sector16, status004103. Backend has
+processed8111commands; last errorE08, drive0offline. The SD handle retains
+error0x10 (TX FIFO underrun), distinguishing this storage fault from the earlier
+FSMC write redirection. Full diagnostic acceptance is still incomplete.
+
+A SRAM-only storage test changes SDIO from24MHz to4MHz, preserves the existing
+2048bytes at imageoffset1632256 and rewrites identical contents1024times. Each
+iteration syncs and verifies readback; all1024 pass, HALerror0. The firmware now
+sets `SD_CLK_DIV=10U` so the polling driver has more time to refill its FIFO
+while USB/SysTick interrupts run. Backend sanitizer tests pass. New firmware
+build/program receipts and evidence are under `build/step47-investigation/sdio4-*`.
+
 ## Missing writes captured exactly — NADV glitch redirects address
 
 The next physical run transferred954/1024. DATA commits/events/HPinputs954,

@@ -8,7 +8,10 @@ include(overall_settings)
 overall_settings(DEBUG_SYMBOLS OPTIMIZATION s)
 include(build_sketch)
 build_sketch(TARGET disk_backend SOURCES src/main.cpp src/platform.cpp src/backend.cpp src/config.cpp DEPENDS USBDevice)
-target_compile_definitions(base_config INTERFACE HSE_VALUE=8000000U SD_DATATIMEOUT=1000U)
+# Polling SDIO shares the CPU with USB/SysTick. At 24 MHz the real carrier
+# recorded TX FIFO underrun after thousands of diagnostic writes. Give the
+# polling loop six times the service margin: 48 MHz / (10 + 2) = 4 MHz.
+target_compile_definitions(base_config INTERFACE HSE_VALUE=8000000U SD_DATATIMEOUT=1000U SD_CLK_DIV=10U)
 
 foreach(lib STM32SD FatFs)
   if(NOT EXISTS "${DISK_DEPS}/${lib}/library.properties")

@@ -14,6 +14,14 @@ ready and services the disk commands; it does not establish that the whole
 controller now passes diagnostics. The observed E50 is consistent with the
 current bring-up stage, not full hardware acceptance.
 
+The 2026-10-29 run with qualified FPGA FSMC strobes passed the earlier
+cylinder-0 short READ and later stopped at cylinder66 on an SD write error.
+The retained HAL error was TX FIFO underrun at the default24MHz SDIO clock.
+Polling SDIO now uses4MHz (`SD_CLK_DIV=10`), giving more time to refill the
+FIFO while interrupts run. A SRAM-only hardware test at4MHz passed1024
+2048-byte writes, syncs and verified readbacks of an existing image region.
+Full diagnostic acceptance of this storage change remains pending.
+
 ## SD card layout
 
 Use a FAT16 or FAT32 card in the carrier's SDIO socket. Copy the example
