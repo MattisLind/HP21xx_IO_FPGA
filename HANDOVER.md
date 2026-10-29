@@ -6,7 +6,25 @@ bring-up state; some older README status paragraphs describe earlier stages.
 
 ## Current hardware and capture — 2026-10-29
 
-### Experimental mailbox FPGA INSTALLED; fresh diagnostic pending
+### Experimental mailbox FPGA PASSED; code review completed
+
+Current branch fpga-rework-experimental, commit32ed30c ("Experimental also
+works"). Saved HP log contains LONG PASS0001 and0002, both0000errors, unit00
+heads0/1; user confirmed this version worked. Installed FPGA/STM32 images are
+unchanged from the setup below. Do not infer the current HP RUN state from this
+review: only saved logs were read, with no hardware access.
+
+Fresh review: diagnostics/hp13210/code-review.md. No production RTL/firmware
+changes or programming. Main tuning finding: bool(Serial) calls delay(10) on
+every idle loop; Serial.dtr() has identical DTR semantics without the delay,
+confirmed against installed ELF and isolated loop tests. Safe cleanup candidates
+include redundant read_wait_ state and unused RTL. Actual RTL tests reproduce
+unselected IOO clearing attention and CRS sticking the first-word seek ack.
+Native model reproduces pending-slot seek loss; joined C++/RTL validation is
+still needed. Pinned SD driver also has unbounded post-transfer ready waits.
+Evidence/isolated candidates under build/code-review/. None is installed.
+
+### Experimental mailbox installation record
 
 Branch fpga-rework-experimental, commit7d59ce5. User authorized programming
 and another normal diagnostic. Installed SRAM FPGA
@@ -16,7 +34,7 @@ BIN verified before and after; no rewrite needed, ELF remains f006ce15... .
 STM halted/load/FSMC scratch+attention checks/reload clean/BINverify/reset/run
 PASS. FAT mounted/all4READY, commands/errors/dropped0, CSR/request0. NoSPIwrites.
 Serial capture5994 and temporary sleep/idle inhibitors34596/38734 active.
-User should freshly run P002000/S000000 RUN, halt on error; acceptance PENDING.
+User subsequently ran P002000/S000000; acceptance recorded above.
 Receipt build/queue-review/installed.json and experimental-*.log/status files.
 
 IMPORTANT: this candidate is UNINSTRUMENTED, four-bit FSMC address decode.
@@ -51,7 +69,8 @@ minimumperiod7.435ns, zero timingerrors. Mapped resources baseline->candidate:
 392->395registers,449->453LUTs,191->190occupiedslices,32->24memoryLUTs.
 No significant area reduction; architecture no longer has a command FIFO.
 Package build/queue-review/seek-mailboxes-ready.zip; experiment.json records
-source hashes/results. Candidate subsequently downloaded as detailed in latest section; full HP diagnostic PENDING. Artifacts build/queue-review/;
+source hashes/results. Candidate subsequently downloaded and passed as detailed
+above. Artifacts build/queue-review/;
 ISE baseline build/queue-baseline-board, final build/queue-mailboxes-v3-board.
 Do not program anything based on old handover pending-run entries below.
 

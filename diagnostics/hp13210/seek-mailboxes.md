@@ -4,7 +4,10 @@ Branch `fpga-rework-experimental` starts from the `working` tag. The tagged
 hardware passed four long diagnostic passes on unit 0, heads 0/1, with zero
 errors, before an orderly switch-register-bit-15 halt (`102004`, P001434).
 This branch changes request capture, not the FSMC waveform fixes or STM32
-firmware. Hardware acceptance of this branch is pending.
+firmware. On 2026-10-29 the installed candidate completed two recorded long
+passes with zero errors on unit 0, heads 0/1; the user confirmed it worked.
+The subsequent [code review](code-review.md) identifies further cleanup and
+corner-case work without changing the installed candidate.
 
 ## Capture rules
 
@@ -57,7 +60,8 @@ All22 controller variants, all eight CPU cases, both RTE-II cases, and
 board/LED tests PASS on the final source. Results and source hashes are recorded
 under `build/queue-review/experiment.json`, `cpu-results.json`, and
 `rte-boot-final/acceptance.json`. A source/bitstream/timing/receipt package is
-`build/queue-review/seek-mailboxes-ready.zip`. No hardware programming occurred.
+`build/queue-review/seek-mailboxes-ready.zip`. These checks preceded programming;
+installation and the two physical long passes are recorded in `HANDOVER.md`.
 
 The final ISE comparison uses the exact `working` production core and identical
 board sources/pins/toolchain (no passive recorders):
