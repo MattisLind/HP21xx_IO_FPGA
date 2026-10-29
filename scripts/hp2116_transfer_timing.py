@@ -38,6 +38,8 @@ def run(out):
            ('normal-and-check-stall8',15,20,8000,35,160),
            ('read-overrun',15,20,200,36,160),
            ('read-overrun-stall8',15,20,8000,36,160),
+           ('write-cylinder-boundary',15,20,200,47,450),
+           ('write-cylinder-boundary-stall8',15,20,8000,47,450),
            ('normal-slower-cpu-stall8',31,20,8000,28,100),
            ('control-six-us',15,6,8000,28,40)]
     def case(settings):
@@ -167,7 +169,7 @@ task automatic stm32_write_cylinder();
     word_count=0; eoc_flag=0; position=0;
     if (transfer_start_us>0) #(transfer_start_us*1us);
     last_response=$time;
-    while (!eoc_flag) begin
+    while (1) begin
       waited=$time;
       transfer_wait((position ? transfer_response_us : transfer_setup_us)*1us,got_word);
       if (!got_word) begin
@@ -180,12 +182,15 @@ task automatic stm32_write_cylinder();
       end
       stm32_fsmc_read16(STM32_REG_7900_DATA,data);
       $display("WORD step=%0d dir=W position=%0d gap_ns=%0d wait_ns=%0d data=%04h",timing_last_step,position,$time-last_response,$time-waited,data);
+      if (eoc_flag) begin
+        stm32_fsmc_write16(STM32_REG_7900_SET_STATUS,{selected_drive[1:0],STATUS_END_OF_CYLINDER});
+        break;
+      end
       off=disk_byte_offset(rar_cylinder,rar_head,rar_sector)+word_count*2;
       disk_image[selected_drive][off]=data[7:0];
       disk_image[selected_drive][off+1]=data[15:8];
       position++;
       calculate_rar("WRITE");
-      if (eoc_flag) stm32_fsmc_write16(STM32_REG_7900_SET_STATUS,{selected_drive[1:0],STATUS_END_OF_CYLINDER});
       if (transfer_service_ns>0) #(transfer_service_ns*1ns);
       last_response=$time;
     end

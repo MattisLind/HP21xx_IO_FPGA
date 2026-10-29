@@ -80,7 +80,7 @@ class Backend {
   static constexpr uint32_t TransferStartUs=100, ResponseTimeoutUs=20;
  private:
   enum Mode { Idle, ReadStart, WriteStart, Read, Write, CheckCount,
-              CheckStart, CheckRead, ReadDrain, WriteDrain } mode_=Idle;
+              CheckStart, CheckRead, ReadDrain, WriteDrain, WriteBoundary } mode_=Idle;
   struct Drive { unsigned cylinder=0; bool seeking=false; uint32_t deadline=0; } drive_[Drives];
   Bus &bus_;
   Images &images_;

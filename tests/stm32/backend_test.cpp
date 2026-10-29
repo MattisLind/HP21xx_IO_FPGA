@@ -371,12 +371,39 @@ static void jittered_transfer_tests() {
     assert(r.engine.longest_read_response_us()==(count==2 ? 6 : 19));
   }
 }
+// Exact-fit WRITE/INIT must succeed; EOC means an attempted next word.
+static void write_cylinder_boundary_tests() {
+  for (unsigned command : {1U,9U}) for (unsigned head : {1U,3U})
+    for (unsigned sector : {16U,23U}) for (bool extra : {false,true}) {
+      Fixture f;
+      const hp::Address a{202,head,sector};
+      f.bus.command(3,0,a); f.engine.step(0); f.engine.step(4000);
+      f.bus.status[0]=0; f.bus.attention=0;
+      f.bus.command(command,0,a); f.engine.step(4001);
+      const unsigned words=a.remaining()/2;
+      for (unsigned i=0;i<words;++i) {
+        f.bus.input(uint16_t(i)); f.engine.step(4002+i);
+      }
+      assert(f.engine.active() && !f.images.writes);
+      assert(!(f.bus.status[0]&hp::EndCylinder));
+      if (extra) f.bus.input(0xdead);
+      f.engine.step(4002+words+(extra ? 0 : hp::Backend::ResponseTimeoutUs));
+      assert(!f.engine.active() && f.images.written==a.remaining());
+      assert(bool(f.bus.status[0]&hp::EndCylinder)==extra);
+      assert(!(f.bus.status[0]&hp::Overrun));
+      assert(f.bus.consumed==words+unsigned(extra));
+      assert(f.images.bytes[0][a.offset()+a.remaining()-2]==uint8_t(words-1));
+      assert(f.bus.attention==(command==9 ? 0 : 1));
+    }
+}
 static void end_cylinder_and_errors() {
   Fixture f;
   // The very last sector of the image. No extra word wraps past the image end.
   f.bus.command(3,0,{202,3,23}); f.engine.step(0); f.engine.step(4000);
   f.bus.command(1,0,{202,3,23}); f.engine.step(4001);
   for (unsigned i=0;i<128;++i) { f.bus.input(0xfeed); f.engine.step(4002+i); }
+  assert(f.engine.active() && !f.images.writes);
+  f.bus.input(0xbeef); f.engine.step(4130); // Attempt to cross EOC.
   assert(!f.engine.active() && f.images.written==256);
   assert(f.bus.status[0]&hp::EndCylinder);
   assert(f.images.bytes[0].back()==0xfe);
@@ -645,7 +672,7 @@ static void unsupported_command_tests() {
 int main() {
   static_assert(hp::ImageBytes==4988928);
   config_tests(); late_word_tests(); response_boundary_tests(); transfer_start_and_service_tests(); jittered_transfer_tests(); startup_seek_tests(); seek_geometry_tests(); seek_busy_recovery_tests(); read_tests(); write_tests();
-  end_cylinder_and_errors(); check_data_tests(); check_dma_tests(); pending_and_check_tests();
+  write_cylinder_boundary_tests(); end_cylinder_and_errors(); check_data_tests(); check_dma_tests(); pending_and_check_tests();
   reset_and_boundary_tests();
   trace_tests();
   unsupported_command_tests();

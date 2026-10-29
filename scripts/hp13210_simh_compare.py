@@ -3,7 +3,7 @@
 
 The default executable is the HP maintainer's supported Release 32. Start at
 P2000 using the existing configured checkpoint, bypassing tape loading only.
-Uses four disposable disks. Checks steps34/35 and section1, not the full diagnostic.
+Uses four disposable disks. Checks steps34/35/46 and section1, not the full diagnostic.
 """
 import argparse
 import hashlib
@@ -34,7 +34,7 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     before = {'simh': digest(executable), 'memory': digest(checkpoint)}
     results = []
-    for case in ('step34', 'step35', 'section1'):
+    for case in ('step34', 'step35', 'step46', 'section1'):
         folder = out/case
         folder.mkdir(exist_ok=True)
         commands = ['set cpu 2116', 'set cpu 32K', 'set cpu EAU',
@@ -48,7 +48,9 @@ def main():
         commands += ['deposit A 0', 'deposit B 0',
                      'deposit S '+('1000' if case == 'section1' else '0')]
         if case != 'section1':
-            start, end = ('4013', '4031') if case == 'step34' else ('4031', '4047')
+            start, end = {'step34': ('4013','4031'),
+                          'step35': ('4031','4047'),
+                          'step46': ('4240','4302')}[case]
             commands += [f'break {start}', 'go 2000', 'examine P,A,B,S',
                          'examine dma1 cw1,cw2,cw3,flg,ctl',
                          f'set debug {folder}/debug.log', 'set cpu debug=instr;reg',
@@ -86,6 +88,18 @@ def main():
                        and transfers == 30 and 'IOI | CLC | EDT' in read)
             entry.update({'read_data_inputs': transfers, 'status_octal': '020001',
                           'final_dma_clc_seen': 'IOI | CLC | EDT' in read})
+        elif case == 'step46':
+            trace = (folder/'debug.log').read_text()
+            writes = trace.split('>>DPC iobus: Received data 010000 with signals IOO')[1:]
+            # Each first word is preloaded before the command. The remaining
+            # 1023 arrive after it; six thirds fill the two cylinder tracks.
+            words = [sum(line.startswith('>>DPD iobus: Received') and 'IOO' in line
+                         for line in part.split('>>DPC iobus: Received data 000000 with signals IOO')[0].splitlines())
+                     for part in writes]
+            passed &= ('P:\t04302' in console and '240:\t000000' in console
+                       and words == [1023]*6)
+            entry.update({'write_words_after_command': words,
+                          'preloaded_words_per_command': 1, 'status_octal':'000000'})
         else:
             passed &= '102011 (HLT 11)' in console and '102001 (HLT 1)' not in console
         entry.update({'pass': bool(passed), 'console_sha256': digest(folder/'console.log'),

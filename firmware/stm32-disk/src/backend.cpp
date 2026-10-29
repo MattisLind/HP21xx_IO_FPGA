@@ -248,6 +248,18 @@ void Backend::step(uint32_t now) {
     mode_=mode_==ReadStart ? Read : mode_==CheckStart ? CheckRead : Write;
     deadline_+=WordTimeoutUs;
   }
+  if (mode_==WriteBoundary) {
+    // Filling the last sector is legal (DSN151302 step46). SIMH and the
+    // original worker report EOC only if another word requests the next
+    // sector. Keep the full buffer bounded while waiting for that request.
+    if (csr&0x40) {
+      (void)bus_.read(Data);
+      mark(Event::EndCylinder);
+      status(selected_,EndCylinder);
+      finish_write(false);
+    } else if (expired(now,deadline_)) finish_write(false);
+    return;
+  }
   if (mode_==Write) {
     // CSR is a level latch, with no arrival timestamp. A pending word may
     // have arrived on time while this poll was delayed by an interrupt.
@@ -261,7 +273,7 @@ void Backend::step(uint32_t now) {
       buffer_[position_++]=uint8_t(word);
       buffer_[position_++]=uint8_t(word>>8);
       deadline_=bus_.now_us(now)+ResponseTimeoutUs;
-      if (position_==length_) { mark(Event::EndCylinder); status(selected_,EndCylinder); finish_write(false); }
+      if (position_==length_) mode_=WriteBoundary;
     } else if (position_ && expired(now,deadline_)) {
       start_drain(true);
       drain(now,csr);

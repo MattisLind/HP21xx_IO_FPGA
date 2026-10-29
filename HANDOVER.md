@@ -6,6 +6,58 @@ bring-up state; some older README status paragraphs describe earlier stages.
 
 ## Current hardware and capture — 2026-10-28
 
+### Step46 DOWNLOAD PACKAGE READY for reconnection tomorrow
+
+User requested firmware/bitstream ready for next dongle connection. Complete
+verified archive: build/step46-download/hp13210-step46-ready.zip; unpacked:
+build/step46-download/ready/. Prepared receipt: build/step46-download/prepared.json.
+Contains NEW STM32 ELF/BIN/HEX17f81beb... and matching FPGA controller.bit
+1c7f3790...; FPGA rebuild unnecessary because sources/build fingerprints match.
+FPGA bitfile is needed again after power loss (volatile SRAM). Both source/build
+receipts, checksums, ZIP integrity and archived file digests verified. No hardware
+access or programming in this preparation. Step46 physical acceptance pending.
+
+Follow the package README for reconnection, cable firmware, capture, STM32 halt,
+FPGA SRAM load/FSMC/reload, then repository STM32 program with fresh verified
+512KiB backup, image verification/reset and FAT/all4 READY/idle checks. Unlike
+step35, STM32 must be updated: new ELF differs from installed5c509335....
+SPI flash remains untouched. HP diagnostic must be reloaded if power lost its
+memory. This package supersedes step35 for tomorrow's retry.
+
+
+### Step46 root cause and STM32 correction — OFFLINE, NOT programmed
+
+User is powering down HP/dongles; continue offline. Step46 writes each track
+in thirds (0–7,16–23,8–15). Head1/sector16 +1024 words exactly fits the
+cylinder. STM32 incorrectly raised EOC at the last valid word (status000041),
+instead of waiting for demand beyond the boundary. Existing CPU/SV model
+reproduces the same physical E64. SIMH32 passes step46, six1024-word writes,
+status000000/errorcount0; original Verilog WRITE worker also delays its EOC
+check until the next accepted word (source comparison).
+
+Production STM32 now waits at the full-buffer boundary: no extra word within
+normal20us window means success; extra word is consumed/discarded, reports
+EOC and completes without writing beyond the cylinder. Applies WRITE/INIT;
+READ/CHECK and FPGA RTL unchanged. Sixteen new native boundary cases reject
+the old backend. Full ASan/UBSan native suite PASS (LSan disabled for sandbox
+ptrace). ARM build PASS:48296 flash/22716 RAM bytes. New ELF SHA256:
+17f81beba4dcfa37837fd5014d92d12cd1628d818e4c727e8d30724d47b66df1.
+Prepared STM32 ELF/BIN/HEX +checksums in build/step46-investigation/ready/.
+NOT programmed. Existing build/stm32-disk/programmed.json remains historical
+actual last installed5c509335...; success.json is the new prepared build.
+Corrected CPU/SV timing model passes through step46 at200ns/8000ns polling.
+SIMH comparison steps34/35/46 and section1 PASS. Aggregate evidence receipt:
+build/step46-investigation/result.json.
+Step35 zip remains the previous release, not corrected step46 firmware.
+FPGA SRAM is volatile: reload step35 FPGA after power loss; HP diagnostic
+memory also needs reloading after HP power loss. Use backup/verify firmware
+programming procedure when hardware is connected and HP halted.
+
+Evidence and details: diagnostics/hp13210/write-cylinder-boundary.md and
+build/step46-investigation/. Physical retry still required. No new hardware
+programming during this investigation.
+
+
 ### Physical retry: step35 PASSED; new halt at step46 WRITE
 
 Fresh H0 banner after SRAM installation; diagnostic advances beyond step35

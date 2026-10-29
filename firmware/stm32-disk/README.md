@@ -294,3 +294,14 @@ passes. Then test SD mounting and drive mapping with the new image, followed
 by non-destructive reads and writes to a disposable disk image. Compare readback
 bytes on the host, then rerun the HP diagnostic. Physical tests, RTE II boot,
 precise overrun behavior and write protection remain outstanding.
+
+### Exact-fit writes at the cylinder boundary
+
+WRITE and INITIALIZE can fill the last sector without End of Cylinder status.
+The backend waits through the normal response window after storing that last
+word. An extra request is acknowledged and discarded, sets End of Cylinder,
+and cannot extend the image write beyond the cylinder. With no extra request,
+the buffered write completes successfully. This matches SIMH's next-sector
+check and fixes DSN151302 step46's final-third write (head1, sector16,
+1024 words). CHECK's autonomous count and READ termination are unchanged.
+See [step46 investigation](../../diagnostics/hp13210/write-cylinder-boundary.md).

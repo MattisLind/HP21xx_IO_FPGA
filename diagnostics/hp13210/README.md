@@ -1,5 +1,9 @@
 # HP 13210 flag bring-up
 
+The [step46 WRITE boundary investigation](write-cylinder-boundary.md) identifies
+premature End of Cylinder status on exact-fit writes and documents the offline
+STM32 correction, SIMH comparison, and pending hardware validation.
+
 The [step35 READ-overrun comparison](read-overrun.md) reproduces the current
 physical failure and compares SIMH, the original READ worker and a CLC-aware
 FPGA candidate. The candidate passes simulation but is not installed.
