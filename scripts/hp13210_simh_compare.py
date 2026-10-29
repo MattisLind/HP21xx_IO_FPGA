@@ -3,7 +3,7 @@
 
 The default executable is the HP maintainer's supported Release 32. Start at
 P2000 using the existing configured checkpoint, bypassing tape loading only.
-Uses four disposable disks. Checks steps34/35/46 and section1, not the full diagnostic.
+Uses four disposable disks. Checks steps34/35/46/47 and section1, not the full diagnostic.
 """
 import argparse
 import hashlib
@@ -34,7 +34,7 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     before = {'simh': digest(executable), 'memory': digest(checkpoint)}
     results = []
-    for case in ('step34', 'step35', 'step46', 'section1'):
+    for case in ('step34', 'step35', 'step46', 'step47', 'section1'):
         folder = out/case
         folder.mkdir(exist_ok=True)
         commands = ['set cpu 2116', 'set cpu 32K', 'set cpu EAU',
@@ -50,7 +50,8 @@ def main():
         if case != 'section1':
             start, end = {'step34': ('4013','4031'),
                           'step35': ('4031','4047'),
-                          'step46': ('4240','4302')}[case]
+                          'step46': ('4240','4302'),
+                          'step47': ('4302','4342')}[case]
             commands += [f'break {start}', 'go 2000', 'examine P,A,B,S',
                          'examine dma1 cw1,cw2,cw3,flg,ctl',
                          f'set debug {folder}/debug.log', 'set cpu debug=instr;reg',
@@ -100,6 +101,19 @@ def main():
                        and words == [1023]*6)
             entry.update({'write_words_after_command': words,
                           'preloaded_words_per_command': 1, 'status_octal':'000000'})
+        elif case == 'step47':
+            trace = (folder/'debug.log').read_text()
+            reads = trace.split('>>DPC iobus: Received data 020000 with signals IOO')[1:]
+            reads = [part.split('>>DPC iobus: Received data 000000 with signals IOO')[0]
+                     for part in reads]
+            words = [sum(line.startswith('>>DPD iobus: Received') and 'IOI' in line
+                         for line in part.splitlines()) for part in reads]
+            final_clc = all('IOI | CLC | EDT' in part for part in reads)
+            passed &= ('P:\t04342' in console and '240:\t000000' in console
+                       and words == [1024]*6 and final_clc)
+            entry.update({'read_words': words, 'final_dma_clc_seen': final_clc,
+                          'status_octal': '000000',
+                          'scope': 'first pattern/cylinder, six reads'})
         else:
             passed &= '102011 (HLT 11)' in console and '102001 (HLT 1)' not in console
         entry.update({'pass': bool(passed), 'console_sha256': digest(folder/'console.log'),

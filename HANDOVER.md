@@ -1,8 +1,302 @@
 # HP 2100 / HP13210 emulator: Codex handover
 
-Updated **2026-10-28**, Europe/Stockholm. Read this first when continuing on the
+Updated **2026-10-29**, Europe/Stockholm. Read this first when continuing on the
 laptop beside the HP 2100. This is a summary of the conversation and actual
 bring-up state; some older README status paragraphs describe earlier stages.
+
+## Current hardware and capture — 2026-10-29
+
+### Address-phase fix INSTALLED; fresh manual diagnostic pending
+
+SRAM FPGAf3be9b71740e1f1851f6a9fb34d0bb1db6415d057645c5517d6a1426f3053033
+installed from build/step47-instrumented-board/controller.bit; snapshot
+build/step47-investigation/address-qualified-ready/. Production and recorder
+22variants PASS; board/LED and passive histogram/trigger tests PASS. Both
+originalCPU step47 replays pass (scale9/poll200ns, scale19/poll8000ns).
+ISE minimumperiod9.622ns, zeroerrors. FPGA stable address qualification now
+protects both address latch and write active/done rearm from single-sample NADV
+low glitches. Earlier read and write qualifiers retained.
+
+Halt/load/FSMC/8192 jittered RAM DATA write+CSRpoll+mirror reads PASS, zeroerrors,
+commits8192/events8192; FPGA reloaded clean, unchanged BIN flashverify/reset/run
+PASS. No SPI/STM32 flashwrites. Awaiting user P002000/S000000 RUN, halt at error,
+replyDone. Both captures and temporary inhibitors remain active.
+After Done run OpenOCD -f build/step47-investigation/read-address-qualified-trace.tcl
+WITHOUT RESET, save stdout address-qualified-run-trace.log. It saves
+address-qualified-run-backend-sram.bin; leaves STM32 halted. Same bank and
+histogram interface as loss recorder below. Raw NADV glitch trigger retained,
+so a frozen trace can now be an ignored glitch; histogram/console determine
+whether words are lost. Complete physical diagnostic acceptance PENDING.
+
+### Captured missing writes EXACTLY; prior failed run evidence
+
+Latest Done: step47 E13 **0954/1024**, E64 STATUS000041 versus000000,
+CYL0 HEAD1 SECTOR16 UNIT0. Counters954 DATA commits/events/HPinputs;
+C++ position/length2048/2048bytes. Histogram DATA4=954, F=70: all70 missing
+software writes redirected to addressF. Frozen stateC044. Trace at trigger0:
+AD transitions4->FFFF while NADV/NOE pulse low20ns with NWE low. Raw address
+latch overwrites address4 withF; write_active resets/restarts atF. This accounts
+exactly for1024-954. Evidence loss-recorder-run-{trace.log,trace.csv,hp.txt,
+backend-sram.bin}. STM32 currently HALTED; HP halted; ae2d81... still installed.
+
+Production and recorder now require stable address phase over two50MHz samples
+before latching AD or clearing write active/done. Captured NADV+NOE20ns pulse
+added to permanent controller test: old core FAILS, fixed production22variants
+PASS. Board and directed passive histogram/trigger tests PASS. Full instrumented
+regression, originalCPU step47 replays, and ISE build PASS (see latest section).
+Read and write qualifiers from earlier fixes retained. New qualified image installed as detailed above.
+
+### Loss recorder installed; previous manual request completed
+
+SRAM image ae2d81cde72ddb34f4770935e35999d3ef304b1d60a9274741da22242314299e
+installed from build/step47-instrumented-board/controller.bit; snapshot
+build/step47-investigation/loss-recorder-ready/. Timing10.071ns, zeroerrors.
+Full22 variants, board/LED, mirror/trace tests and directed histogram/both
+loss-trigger tests PASS. Protocol same as read-qualified9ba36674...; only
+passive recorder changes. Halt/load/FSMC/reload/BINverify/reset/run PASS.
+Next user run P002000/S000000 RUN, halt at failure, replyDone.
+After Done use OpenOCD -f build/step47-investigation/read-loss-trace.tcl,
+save stdout loss-recorder-run-trace.log. No reset; script leaves STM32 halted.
+It saves loss-recorder-run-backend-sram.bin and dumps per-register histograms.
+Debug bank same as targeted recorder except mirror at CPU60000030 returns
+write_histogram[scratch&15] when scratch bit8 set; scratch100..10F selects.
+Trigger on unexpected writeaddress (except DATA4/ATTN6/SET8/CLRA) or unfinished
+write at next NADV address phase in cylinder0/head1/sector16 READ. Previous
+old-flag-high trigger retained. Decoder decode-target-trace.py accepts logpath
+and writes CSV; traceHP lowbits match read-qualified description below.
+Both captures and temporary sleep/idle inhibitors remain active.
+
+### Qualified-read rerun STILL fails; preserved evidence
+
+Latest Done: step47 E13 **0935/1024**, E64 STATUS000041 versus000000,
+CYL0 HEAD1 SECTOR16 UNIT0. Counters935 DATA commits/events/HPinputs;
+C++ position/length2048/2048bytes. Recorder state0032, NO_FROZEN_TARGET_TRACE:
+the earlier DATA-commit/old-flag-high fault did not recur, but89 software words
+have no decoded FPGA DATA commit. Evidence read-qualified-run-trace.log and
+read-qualified-run-backend-sram.bin under build/step47-investigation.
+STM32 left HALTED, HP halted. Current installed9ba36674... unchanged.
+Passive recorder triggers for unexpected write address and an
+uncommitted write at next NADV address phase, plus per-register write histogram
+are now installed (see latest section).
+Production protocol unchanged during this instrumentation step.
+
+### Qualified-read fix installed; previous manual request completed
+
+Installed SRAM FPGA9ba36674dc4c90ab124a5bc94cfc92a26f0cb374c83a12ee1259ec00d77e85c0
+from build/step47-instrumented-board/controller.bit; snapshot read-qualified-ready/.
+ISE minimum period7.238ns, zero timingerrors. Production+recorder full22variants,
+board/LED, recorder mirror/counter/trace test PASS. Original CPU isolatedstep47
+replays CPUscale9/poll200ns and CPUscale19/poll8000ns both PASS.
+STM32 halted/load/FSMC PASS/reload/unchanged BIN flashverify/reset/run complete.
+FAT mounted, all4READY, commands/errors/dropped0, CSR/request0000. No flashwrites.
+User asked for P002000/S000000 RUN, halt at failure, replyDone; result PENDING.
+
+Last target run: step47 E13 **0944/1024**, E64 STATUS000041 versus000000,
+CYL0 HEAD1 SECTOR16 UNIT0. DATA commits944, events944, HP inputs944 while
+C++ position/length2048/2048 bytes. Evidence target-run-trace.log,
+target-run-waveform.csv, target-run-backend-sram.bin under step47-investigation.
+Waveform shows NOE low20ns while NWE low during DATA write, false read-DATA
+ack clears IRQ/sets flag buffer380ns before real completion; HP flag rises340ns
+early. Permanent overlap regression FAILS old core, PASSES fixed core.
+Production and recorder now require NWE high and two read-window samples before
+read side effects; bus output release remains immediate. Physical acceptance pending.
+
+After Done, use read-target-trace.tcl WITHOUT RESET, but copy it first to replace
+output target-run-backend-sram.bin with read-qualified-run-backend-sram.bin;
+retain stdout in read-qualified-run-trace.log so prior evidence stays intact.
+Script halts STM32 and leaves it HALTED. Do NOT use old read-counters.tcl bank.
+TraceHP lowbits3:0 are now readDATAnegedge, readValid, rawReadWindow,0;
+upper12bits unchanged. Scopebank/trigger described in historical section below.
+Serial captures20261029T062605Z and temporary inhibitors34596/38734 active.
+
+### Fresh run STILL fails step47; TARGETED recorder installed, retry pending
+
+Fresh H0 captured with USB stable: H46 READ IN STEP47; E13 0966/1024,
+E64 STATUS000041 expected000000, CYL0 HEAD1 SECTOR16 UNIT0. Normal passive
+counters966 staged/HPinputs/dataSTC; flagbusy36, CLF0, IRQfull0, rawSTC967.
+C++ SRAM position/length2048/2048 bytes. Evidence `fresh-retest/` and
+`fresh-run-physical-counters.log`/`fresh-run-backend-sram.*` under step47-investigation.
+The captured address/data fault is real and its standalone tests pass, but
+stable-release fix is NOT a complete disk diagnostic solution.
+
+Installed targeted recorder FPGA809a8bbe8740d9c3cd424efe58e48f67a23c01a674e72f8b27170104d9854089
+in SRAM (7.595ns). SAME stable-release protocol logic; passive per-READ global
+DATA commit/event counters and256-sample AD/control/HP flag recorder added.
+Trigger: cylinder0/head1/sector16 READ completion while old data flag high.
+All22 variants +mirror/counter/trace unit test PASS. STM32 halt/load/FSMC/reload,
+unchanged BIN verified/reset/run, all4READY/idle zero counters. No flash writes.
+
+User asked for P2000/S0 RUN once more; reply pending. After Done, use
+`build/step47-investigation/read-target-trace.tcl` (NOT read-counters.tcl!)
+via OpenOCD WITHOUT RESET. It halts STM32, reads counts +frozen256-sample
+waveform and saves backend SRAM, leaving STM32 HALTED. Scopebank CPU20state,
+24commits,28events,2CHPinputs,30DATA mirror,34traceHP,38traceAD,3Ctracecontrols;
+all CPU addresses based60000000. Scratch1C selects trace index0..255.
+State bits15triggered/14done/7:0nextpointer; 16 post-trigger samples plus
+trigger+final stop cycle, chronological trigger offset238 of256 samples.
+Tracecontrols15:12=IOI,dsel,STC,CLF;11:8writeaddress;7:0=NE,NADV,NWE,NOE,
+writewindow,active,NWEhigh-delayed,done. TraceHP15:4=dataFF,dataFBF,dataIRQ,
+commandFF,readEnded,ENF,readCSR,writeDATA,writeDATAnegedge,writeAttention,
+readCSRnegedge,STCnegedge;3:0zero. Target source snapshot targeted-recorder-core.v.
+
+Both serial captures remain active20261029T062605Z; sleep/lid inhibitor34596
+(child34597), GNOME idle inhibitor38734 active TEMPORARILY. Clean up those
+processes when diagnostic session ends. Older state paragraphs below historical.
+
+### USB restored; FRESH fixed-image diagnostic ready, user retry pending
+
+USB loss was laptop LID-CLOSE suspend: logind08:38:54 lid closed/suspending,
+08:39:06 lid opened, kernel08:39:07 hub2-2 and children disconnected onresume.
+User reinserted upstream USB lead; all4 devices returned, Xilinx stillwarm0008,
+both captures automatically reconnected. Temporary systemd inhibitor PID34596
+(child sleep34597) blocks sleep/idle/lid; GNOME idle inhibitor also active to
+prevent screen blanking. These are temporary processes, no permanentsettings;
+remove when diagnostic session ends. Kernel/logind evidence under
+`build/step47-investigation/usb-suspend-*.log`.
+
+Retained final-fix run counters955 DATA events/HPinputs/dataSTC, flagbusy37;
+C++ SRAM2048/2048 bytes. Latest HP console text was LOST during USB outage.
+User reports A=64 B=4 M012135 HLT102001. This is NOT a diagnostic pass.
+Fast SRAM-only tests (no flash changes) subsequently passed8192 scratch,
+8192 jittered scratch, and8192 jittered DATA/mirror tests; DATA global commits
+and completion events both8192. Temporary DATA-scope image used only for these
+measurements, not the next diagnostic; its bank differs from normal counters.
+
+User requested a fresh diagnostic rather than digging further into the lost
+capture. Restored EXACT fixed+counter image9e623d70... from
+`build/step47-investigation/ready/controller-instrumented.bit`, STM32 halted,
+FSMC checks PASS/reloaded, unchanged STM32 BIN verified/reset/run. No flash
+writes. Fresh FAT/all4READY, commands/errors/dropped0, CSR/request0000.
+Both ports active in20261029T062605Z. User asked to run P2000/S0, RUN, leave
+HP halted at failure, replyDone. Pending. Read normal passive counters WITHOUT
+RESET after reply usingread-counters.tcl. DO NOT load current
+`build/step47-instrumented-board/controller.bit` blindly: it is the temporary
+DATA-scope image; the verified ready/ image is the actual restored one.
+
+### USB hub disconnected — final fixed-image diagnostic result NOT captured
+
+Latest user replied Done to the fixed-image retry request. No new H0 or disk
+commands were captured after final fixed image installation; latest visible
+console failure remains historical guard-image step26/E47. Both serial ports
+disconnected2026-10-29T07:39:06Z (08:39 Stockholm). Fresh host lsusb/by-id shows
+HP FTDI, STM32 CDC, ST-Link and Xilinx cable all absent. Monitor PID5994 is
+alive, waiting to reconnect. Do NOT claim final fixed image passed/failed disk
+diagnostics. Its halted8192-transaction scratch stress passed0 errors.
+
+User asked to reconnect hub, keep HP halted, and report whether FPGA/HP power
+was interrupted. Reply pending. If FPGA stayed powered, preserve/read counters
+WITHOUT RESET first. If FPGA lost power, SRAM image lost: reload fixed image
+via normal halt/FSMC/reload/STM verify-reset flow once HP halt is established.
+Production fixed503f63a2... and instrumented fixed9e623d70... both available in
+verified `build/step47-investigation/hp13210-fsmc-stable-release-ready.zip`.
+Current hardware power state unknown; previous all4READY status is historical.
+One combined live status/query tool attempt timed out in automatic approval
+review; subsequent read-only host checks succeeded and established disconnect.
+No hardware changes in this check. Latest result receipt updated accordingly.
+
+### FSMC address/data release fault captured; stable-release fix INSTALLED
+
+Latest guarded run stopped earlier at step26/E47: word35=000004 instead of
+137752, but FPGA/HP both128 words. Scratch stress reproduced address000E
+substitution (3/512); two-sample write-window candidate failed65/8192 and was
+rejected. On-FPGA waveform recorder captured NWE high for one20ns sample at
+address/data transition, while AD changes000E->F77F, followed by real data
+NWE-low phase. Old core commits address then data; write-once guard keptaddress.
+
+Production core now waits for NWE high on TWO consecutive samples, retaining
+pending write/last data across brief releases; one commit per NADV transaction.
+Permanent tests replay measured pulse, reject old core, all22 variants and
+board/LED PASS. Installed FIXED+counter image9e623d70... SRAM, ISE8.088ns;
+FSMC checks/reload, STM32 BIN flash verify/reset PASS. No STM32 or SPI flash
+writes. Halted scratch stress8192/8192 PASS (previous65 failures). Both CPU/SV
+step47 replay cases PASS (50MHz FPGA, CPU9/poll200ns; CPU19/poll8us).
+
+All4READY/FAT, commands/errors/dropped0, CSR/request0000 after stress/resume.
+Both captures active20261029T062605Z. User asked to run P2000/S0 again and
+leave HP halted. Next read console +passive counters via read-counters.tcl,
+without resetting; current debug bank is again eight counters, not trace RAM.
+Physical diagnostic acceptance pending. Production bitstream503f63a2...
+(7.213ns) built/validated, NOT installed; instrumented fixed bitstream remains
+installed. Verified ready ZIP: `build/step47-investigation/hp13210-fsmc-stable-release-ready.zip`,
+receipt `prepared.json`. Package distinguishes production vs installed counter image. See updated
+`diagnostics/hp13210/read-cylinder-boundary.md`, `build/step47-investigation/result.json`
+and waveform/stress evidence. Older candidate paragraphs below are historical.
+
+### Step47 counter evidence; write-once FPGA candidate INSTALLED, retry pending
+
+Counter rerun: E13 0936/1024, status000041. FPGA counted1179 DATA completion
+events but936 HP inputs and936 accepted data STC. Flag-busy177, CLF overlap0,
+IRQ-full0, rawSTC937. C++ SWD SRAM snapshot confirms2048/2048 byte transfer
+position/length (1024 logical stages), head1/sector16. Evidence under
+`build/step47-investigation/physical-counters.log` and `backend-sram.*`.
+
+Directed test: repeated NWE excursions within one NADV address transaction
+produce duplicate DATA events in baseline. Candidate write-done latch permits
+one commit until next NADV. Physical cause/fix still unproven; waveforms not
+captured. Candidate remains isolated under `build/step47-instrumented-board/`;
+production core unchanged. All22 variants +board/LED PASS, ISE7.130ns.
+
+Loaded guarded counter FPGA55b65dc8... SRAM with STM32 halted; FSMC PASS,
+reloaded, existing STM32 BIN verified at08000000, reset/run. Initial ELF verify
+attempts failed before restart; final BIN flash verification explicitly PASS.
+No STM32 flash write or SPI flash write. All4READY/FAT, commands/errors/dropped0,
+CSR/request0000. Captures active20261029T062605Z. User asked for P2000/S0 rerun,
+leave HP halted, reply Done. Next read passive counters without reset using
+`build/step47-investigation/read-counters.tcl`; compare staged events to1024,
+HP inputs/data STC and console word count. Full receipt `result.json` nearby.
+
+### Step47 investigation — temporary passive-counter FPGA installed
+
+SIMH32 passes first step47 pattern/cylinder: six1024-word READs, status0,
+errorcount0. Original unmodified READ worker with production transport passes
+at CPU divider1; divider3 times out. Literal original-model replay has not
+passed; historical d855d26 reports a long pass before CPU scaling was added
+in06c060d. No proven physical root cause or functional fix yet. See
+`diagnostics/hp13210/read-cylinder-boundary.md` for scope and limitations.
+
+Installed temporary FPGA SRAM image `build/step47-instrumented-board/controller.bit`
+adds passive counters only; production RTL files unchanged. All22 variants,
+board/LED and counter-side-effect tests PASS; ISE6.886ns. STM32 halted for
+load/FSMC/reload, then existing17f81beb... ELF verified/reset/run without flash
+write. SPI flash untouched. FAT/all4READY, commands/errors/dropped0, idle
+CSR/request0000. Both captures remain active in20261029T062605Z.
+
+User asked to rerun P002000/S000000 and leave HP halted. After failure, collect
+fresh USB status, then halt STM32 WITHOUT RESET and run
+`build/step47-investigation/read-counters.tcl` via OpenOCD. Debug registers
+CPU0x60000020..3C stride4: staged,HPinputs,dataSTC,flagBusy,flagCLF,irqFull,
+rawSTC,lastFlags. Retained across status commands, cleared on new READ/CHECK
+or reset. This will distinguish excess requests from lost ready flags.
+Receipt `build/step47-investigation/result.json`. Physical rerun pending.
+
+### Physical retry: step46 PASSED; new halt at step47 READ
+
+Fresh H0 banner followed by H46 READ IN STEP47, E13 0953 WORDS TRANSFERRED
+1024 EXPECTED, E64 STATUS IS000041 SHOULD BE000000; H51 CYL0000 HEAD01
+SECTOR16 WORD COUNT1024 UNIT00. This provides physical evidence that the
+step46 WRITE correction passed; full diagnostic still fails. Final STM32 trace
+RD/EC/CM. Fresh status: all4READY, commands71/errors3/dropped0, CSR0040,
+request00C0, command2000, RAR0030, last_errorE06, READmax6us/WRITEmax3us.
+Evidence `build/step46-download/install/retest/`. Both captures remain active.
+No hardware changes or HP inputs during this check. Step47 cause uninvestigated.
+
+### Step46 FPGA/STM32 INSTALLED — ready for diagnostic retry
+
+User confirmed HP halted. Both serial ports captured under
+`build/serial-logs/20261029T062605Z/` (HP FTDI AH01E1EM at2400/7E2;
+STM32 CDC378035813433). Xilinx cable RAM firmware initialized; JTAG
+XC6SLX9 ID24001093 detected. Verified package checksums and STM32 source/build
+fingerprints. STM32 halted, FPGA SRAM loaded with1c7f3790..., FSMC scratch
+and attention checks PASS, same FPGA reloaded to clear test state.
+SPI flash untouched. New STM3217f81beba4dc... programmed/verified/reset via
+repository flow after fresh verified512KiB backup; see
+`build/stm32-disk/programmed.json`. Initial SD/FAT mount failure cleared after
+program/reset without card changes: two fresh reports FAT mounted, all4READY,
+commands/errors/dropped0, CSR/request0000, last_error none.
+Installation receipt `build/step46-download/install/installed.json`.
+No HP console input sent. Physical step46 acceptance remains PENDING.
+Keep FPGA powered. Reload diagnostic if HP memory lost; configured normal
+restart P002000/S000000, data14/command15 octal.
 
 ## Current hardware and capture — 2026-10-28
 

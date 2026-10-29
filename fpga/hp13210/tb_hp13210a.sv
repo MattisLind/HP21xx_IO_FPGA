@@ -160,6 +160,22 @@ module tb_hp13210a;
     stm32_fsmc_ne=OMIT_NE ? 0 : 1; host_oe=0; #183;
   endtask
 
+  // Measured FSMC waveform: NWE briefly releases while AD changes from
+  // address to data, then asserts again for the actual data phase.
+  task backend_write_boundary_release(input logic [15:0] address, input logic [15:0] data);
+    address_phase(address, 1);
+    stm32_fsmc_nwe=1; host_ad=data; #20;
+    stm32_fsmc_nwe=0; #380;
+    stm32_fsmc_nwe=1; #179;
+    stm32_fsmc_ne=OMIT_NE ? 0 : 1; host_oe=0; #183;
+  endtask
+
+  integer data_commit_events=0;
+  integer commits_before;
+  always @(posedge clk)
+    if (dut.core.stm32_write_7900_data_negedge)
+      data_commit_events=data_commit_events+1;
+
   task backend_read(input logic [15:0] address, output logic [15:0] value);
     address_phase(address);
     host_oe=0; #177;
@@ -578,6 +594,61 @@ module tb_hp13210a;
         end
         check_overrun(test_bit==2);
       end
+    end
+
+    if (ENABLE_STM32) begin
+      pulse(7);
+      start_transfer(4'h2);
+      select_channel(0); pulse(1);
+      commits_before=data_commit_events;
+      backend_write_boundary_release(16'h0004,16'hbeef);
+      check(data_commit_events==commits_before+1,
+            "Address/data NWE release must not duplicate DATA completion");
+      pulse(2); hp_read(0,16'hbeef);
+      pulse(7);
+      backend_write_boundary_release(16'h0006,16'h0001);
+      backend_read(16'h0006,value);
+      check(value==16'h0001,"Address/data release must not OR address into attention");
+      // Captured on the failing physical READ: NOE pulses low for one
+      // 50 MHz sample while NWE remains low during a DATA write.
+      pulse(7);
+      start_transfer(4'h2);
+      select_channel(0); pulse(1); pulse(3);
+      check(dut.core.stm32_data_channel_irq_ff===1,
+            "READ continuation is pending before DATA write");
+      commits_before=data_commit_events;
+      address_phase(16'h0004,1);
+      host_ad=16'hbeef; #80;
+      stm32_fsmc_noe=0; #20; stm32_fsmc_noe=1; #180;
+      check(dut.core.stm32_data_channel_irq_ff===1,
+            "NOE overlap during write must not acknowledge READ continuation");
+      check(dut.core.data_channel_flag_buffer_ff===0,
+            "NOE overlap must not present stale data to HP");
+      stm32_fsmc_nwe=1; #179;
+      stm32_fsmc_ne=OMIT_NE ? 0 : 1; host_oe=0; #183;
+      check(data_commit_events==commits_before+1,
+            "Overlapping NOE pulse must preserve one DATA completion");
+      check(dut.core.stm32_data_channel_irq_ff===0,
+            "Actual DATA completion acknowledges READ continuation");
+      pulse(2); hp_read(0,16'hbeef);
+      // Captured loss: NADV and NOE both pulse low for one sample as
+      // AD changes from address 4 to FFFF. It is still the same DATA write.
+      pulse(7);
+      start_transfer(4'h2);
+      select_channel(0); pulse(1); pulse(3);
+      commits_before=data_commit_events;
+      address_phase(16'h0004,1);
+      host_ad=16'hffff; #80;
+      stm32_fsmc_nadv=0; stm32_fsmc_noe=0; #20;
+      stm32_fsmc_nadv=1; stm32_fsmc_noe=1; #300;
+      stm32_fsmc_nwe=1; #179;
+      stm32_fsmc_ne=OMIT_NE ? 0 : 1; host_oe=0; #183;
+      check(data_commit_events==commits_before+1,
+            "Brief NADV glitch must not redirect DATA write to address F");
+      pulse(2); hp_read(0,16'hffff);
+      backend_write_boundary_release(16'h000e,16'ha55a);
+      backend_read(16'h000e,value);
+      check(value==16'ha55a,"Boundary release retains last data sample");
     end
 
     reset=1; #199; reset=0; #211;

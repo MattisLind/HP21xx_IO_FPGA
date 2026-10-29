@@ -208,27 +208,63 @@ localparam [2:0] SEEK_IDLE = 3'd0,
   reg [15:0] test_register;
 
   // Multiplexed address bits may remain on AD after NADV rises while NWE
-  // is already low. Keep the last data-phase sample and commit exactly once
-  // when synchronized NWE rises; never OR/set/clear from transient AD values.
+  // is already low. Keep the last data-phase sample and commit once per
+  // address transaction after synchronized NWE stays high for two samples.
+  // A brief release at the address/data boundary must not commit the address.
+  // AD transitions can couple a one-sample low pulse onto NADV. Only a
+  // stable address phase may latch AD or rearm the write transaction.
+  reg fsmc_address_window_delayed;
+  wire fsmc_address_window = !stm32_fsmc_ne && !stm32_fsmc_nadv;
+  wire fsmc_address_valid = fsmc_address_window && fsmc_address_window_delayed;
+  always @(posedge clk) begin
+    if (reset || popio) fsmc_address_window_delayed <= 1'b0;
+    else fsmc_address_window_delayed <= fsmc_address_window;
+  end
+
   reg fsmc_write_active;
+  reg fsmc_write_done;
+  reg fsmc_nwe_high_delayed;
   reg [15:0] fsmc_write_data;
   reg [3:0] fsmc_write_address;
   wire fsmc_write_window = !stm32_fsmc_ne && stm32_fsmc_nadv &&
                            !stm32_fsmc_nwe && stm32_fsmc_noe;
-  wire fsmc_write_commit = fsmc_write_active && stm32_fsmc_nwe;
-
+  // Multiplexed FSMC has a short NWE release at the address/data boundary.
+  // It must stay high for two samples before this is a completed write.
+  wire fsmc_write_commit = fsmc_write_active && stm32_fsmc_nwe &&
+                          fsmc_nwe_high_delayed && !fsmc_write_done &&
+                          stm32_fsmc_nadv && !stm32_fsmc_ne;
   always @(posedge clk) begin
     if (reset || popio) begin
       fsmc_write_active <= 1'b0;
+      fsmc_write_done <= 1'b0;
+      fsmc_nwe_high_delayed <= 1'b0;
       fsmc_write_data <= 16'h0000;
       fsmc_write_address <= 4'h0;
     end else begin
-      fsmc_write_active <= fsmc_write_window;
-      if (fsmc_write_window) begin
+      fsmc_nwe_high_delayed <= stm32_fsmc_nwe;
+      if (fsmc_address_valid) begin
+        fsmc_write_active <= 1'b0;
+        fsmc_write_done <= 1'b0;
+      end else if (fsmc_write_commit) begin
+        fsmc_write_active <= 1'b0;
+        fsmc_write_done <= 1'b1;
+      end else if (fsmc_write_window && !fsmc_write_done) begin
+        fsmc_write_active <= 1'b1;
         fsmc_write_data <= stm32_fsmc_ad_in;
         fsmc_write_address <= address_register;
       end
     end
+  end
+
+  // NOE can pulse low during a write on the physical multiplexed bus.
+  // Only a stable read window may acknowledge requests or present HP data.
+  reg fsmc_read_window_delayed;
+  wire fsmc_read_window = !stm32_fsmc_ne && stm32_fsmc_nadv &&
+                          !stm32_fsmc_noe && stm32_fsmc_nwe;
+  wire fsmc_read_valid = fsmc_read_window && fsmc_read_window_delayed;
+  always @(posedge clk) begin
+    if (reset || popio) fsmc_read_window_delayed <= 1'b0;
+    else fsmc_read_window_delayed <= fsmc_read_window;
   end
 
   //localparam [3:0] STM32_REG_DATA       = 4'hc;
@@ -275,20 +311,20 @@ localparam [2:0] SEEK_IDLE = 3'd0,
     stm32_data_access = stm32_fsmc_nadv & ~stm32_fsmc_ne;
 
     stm32_status_access = stm32_data_access & (address_register == STM32_REG_CSR);
-    stm32_read_csr = ~stm32_fsmc_noe & stm32_status_access;
+    stm32_read_csr = fsmc_read_valid & stm32_status_access;
     stm32_write_csr = fsmc_write_commit && fsmc_write_address == STM32_REG_CSR;
 
     stm32_read_csr_negedge = ~stm32_read_csr_registered & stm32_read_csr_delayed;
 
     stm32_7900_command_status_access = stm32_data_access & (address_register == STM32_REG_7900_COMMAND_STATUS);
-    stm32_read_7900_command_status = stm32_7900_command_status_access & ~stm32_fsmc_noe;
+    stm32_read_7900_command_status = stm32_7900_command_status_access & fsmc_read_valid;
     stm32_write_7900_command_status = fsmc_write_commit && fsmc_write_address == STM32_REG_7900_COMMAND_STATUS;
     
     stm32_write_7900_command_status_negedge = ~stm32_write_7900_command_status_registered & stm32_write_7900_command_status_delayed;
 
  
     stm32_7900_data_access = stm32_data_access & (address_register == STM32_REG_7900_DATA);
-    stm32_read_7900_data = stm32_7900_data_access & ~stm32_fsmc_noe;
+    stm32_read_7900_data = stm32_7900_data_access & fsmc_read_valid;
     stm32_write_7900_data = fsmc_write_commit && fsmc_write_address == STM32_REG_7900_DATA;
 
 
@@ -296,7 +332,7 @@ localparam [2:0] SEEK_IDLE = 3'd0,
     stm32_read_7900_data_negedge = ~stm32_read_7900_data_registered & stm32_read_7900_data_delayed;
 
     stm32_7900_attention_access = stm32_data_access & (address_register == STM32_REG_7900_ATTENTION);
-    stm32_read_7900_attention = stm32_7900_attention_access & ~stm32_fsmc_noe;
+    stm32_read_7900_attention = stm32_7900_attention_access & fsmc_read_valid;
     stm32_write_7900_attention = fsmc_write_commit && fsmc_write_address == STM32_REG_7900_ATTENTION;
 
     stm32_write_7900_attention_negedge = ~stm32_write_7900_attention_registered & stm32_write_7900_attention_delayed;
@@ -308,7 +344,7 @@ localparam [2:0] SEEK_IDLE = 3'd0,
     stm32_7900_command_clear_status = fsmc_write_commit && fsmc_write_address == STM32_REG_7900_CLEAR_STATUS;
 
     stm32_7900_seek_record_access = stm32_data_access & (address_register == STM32_REG_7900_SEEK_RECORD);
-    stm32_read_7900_seek_record = stm32_7900_seek_record_access & ~stm32_fsmc_noe;
+    stm32_read_7900_seek_record = stm32_7900_seek_record_access & fsmc_read_valid;
 
 
     stm32_irq = stm32_irq_ff & stm32_irq_enable | stm32_data_channel_irq_ff & stm32_data_channel_irq_enable;
@@ -418,7 +454,7 @@ localparam [2:0] SEEK_IDLE = 3'd0,
 
         // microcontroller interface
 
-        if (~stm32_fsmc_ne && ~stm32_fsmc_nadv) address_register <= stm32_fsmc_ad_in[3:0];
+        if (fsmc_address_valid) address_register <= stm32_fsmc_ad_in[3:0];
         
         //--------------------------------------------------------------------
         // Simple flip-flop controls

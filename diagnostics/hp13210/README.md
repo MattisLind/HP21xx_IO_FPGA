@@ -1,5 +1,12 @@
 # HP 13210 flag bring-up
 
+The [step47 FSMC investigation](read-cylinder-boundary.md) captures a brief
+NWE release at the physical address/data boundary. The production fix waits
+for a stable release and commits once per address transaction. The installed
+fixed FPGA passes8192 hardware scratch write/readbacks; disk diagnostic
+still fails at step47 (966/1024 words); a targeted waveform recorder is now
+installed for investigation. That report supersedes older current-state claims below.
+
 The [step46 WRITE boundary investigation](write-cylinder-boundary.md) identifies
 premature End of Cylinder status on exact-fit writes and documents the offline
 STM32 correction, SIMH comparison, and pending hardware validation.
