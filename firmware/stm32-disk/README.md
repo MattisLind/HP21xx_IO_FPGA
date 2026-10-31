@@ -69,6 +69,8 @@ PY
 
 Copy that file to the card's `images` directory. Existing testbench images
 with this layout can be used directly. A blank image contains no bootable OS.
+For the 32K-word HP 2100S with TBG/TTY/PTR/PTP on select codes 10/11/12/13
+and disk on 14/15, see the [RTE image generation and boot instructions](../../software/rte-2100s/README.md).
 Configured images are opened read/write without creating, truncating, or
 appending. Missing, wrong-sized, or inaccessible images remain offline.
 Write protection and cylinder-attribute metadata are deferred. Successful

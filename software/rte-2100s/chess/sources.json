@@ -1,0 +1,10 @@
+{
+  "chessbcs.zip": {
+    "url": "https://newton.freehostia.com/net/oldcomp/hpgames/chessbcs.zip",
+    "sha256": "35b08a86d04dc58af9f9ded796a1cd453577378b2519953b5e65c6eee2816c60"
+  },
+  "chess_log.txt": {
+    "url": "https://newton.freehostia.com/net/oldcomp/hpgames/chess_log.txt",
+    "sha256": "14ffcb40e2a67325d9220238da5b5a1914bd6ffa58f7b60a1be280e763b36353"
+  }
+}
