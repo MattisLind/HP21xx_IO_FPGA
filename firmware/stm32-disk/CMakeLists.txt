@@ -7,7 +7,7 @@ set_board(GENERIC_F407VETX SERIAL disabled USB CDCgen XUSB FS)
 include(overall_settings)
 overall_settings(DEBUG_SYMBOLS OPTIMIZATION s)
 include(build_sketch)
-build_sketch(TARGET disk_backend SOURCES src/main.cpp src/platform.cpp src/backend.cpp src/config.cpp DEPENDS USBDevice)
+build_sketch(TARGET disk_backend SOURCES src/main.cpp src/platform.cpp src/backend.cpp src/config.cpp src/sd_diskio.c DEPENDS USBDevice)
 # Polling SDIO shares the CPU with USB/SysTick. At 24 MHz the real carrier
 # recorded TX FIFO underrun after thousands of diagnostic writes. Give the
 # polling loop six times the service margin: 48 MHz / (10 + 2) = 4 MHz.
@@ -19,5 +19,7 @@ foreach(lib STM32SD FatFs)
   endif()
   target_include_directories(base_config INTERFACE "${DISK_DEPS}/${lib}/src")
   file(GLOB_RECURSE lib_sources CONFIGURE_DEPENDS "${DISK_DEPS}/${lib}/src/*.c" "${DISK_DEPS}/${lib}/src/*.cpp")
+  # Local adaptation bounds upstream's infinite card-ready loops on removal.
+  list(FILTER lib_sources EXCLUDE REGEX "/drivers/sd_diskio\\.c$")
   target_sources(disk_backend PRIVATE ${lib_sources})
 endforeach()

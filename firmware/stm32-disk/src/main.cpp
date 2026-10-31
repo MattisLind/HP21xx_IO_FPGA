@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <STM32SD.h>
 #include "backend.h"
+#include "media.h"
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
@@ -22,20 +23,27 @@ class FsmcBus : public hp::Bus {
   }
 };
 
-class FatImages : public hp::Images {
+class FatImages : public hp::Images, public hp::Media {
  public:
   hp::Config config;
   char message[128] = "SD not initialized";
-  void mount() {
+  bool mount() override {
     SD.setDx(PC8, PC9, PC10, PC11);
     SD.setCK(PC12);
     SD.setCMD(PD2);
-    if (!SD.begin()) { trace.push(hp::Event::SdError); strcpy(message,"SD/FAT mount failed"); return; }
+    if (!SD.begin()) {
+      // A failed FAT mount can leave the disk driver registered; a failed HAL
+      // init can leave the peripheral in ERROR. Reset both before retrying.
+      unmount();
+      trace.push(hp::Event::SdError);
+      strcpy(message,"SD/FAT mount failed; retrying");
+      return false;
+    }
     trace.push(hp::Event::SdMounted);
     FIL file={};
     if (f_open(&file,"/hp13210.cfg",FA_READ)!=FR_OK) {
       trace.push(hp::Event::ConfigOpenError);
-      strcpy(message,"Missing /hp13210.cfg; all drives offline"); return;
+      strcpy(message,"Missing /hp13210.cfg; all drives offline"); return true;
     }
     char text[1025];
     UINT got=0;
@@ -43,10 +51,10 @@ class FatImages : public hp::Images {
     const bool size_ok=config_size<sizeof(text);
     const bool read_ok=size_ok && f_read(&file,text,sizeof(text)-1,&got)==FR_OK && got==config_size;
     const bool close_ok=f_close(&file)==FR_OK;
-    if (!read_ok || !close_ok) { trace.push(hp::Event::ConfigReadError); strcpy(message,"Config unreadable or larger than 1024 bytes"); return; }
+    if (!read_ok || !close_ok) { trace.push(hp::Event::ConfigReadError); strcpy(message,"Config unreadable or larger than 1024 bytes"); return true; }
     text[got]=0;
-    if (memchr(text,0,got)) { trace.push(hp::Event::ConfigParseError); strcpy(message,"Config contains an embedded NUL"); return; }
-    if (!hp::parse_config(text,config,message,sizeof(message))) { trace.push(hp::Event::ConfigParseError); return; }
+    if (memchr(text,0,got)) { trace.push(hp::Event::ConfigParseError); strcpy(message,"Config contains an embedded NUL"); return true; }
+    if (!hp::parse_config(text,config,message,sizeof(message))) { trace.push(hp::Event::ConfigParseError); return true; }
     trace.push(hp::Event::ConfigLoaded);
     strcpy(message,"FAT mounted; unavailable/invalid images stay offline");
     for (unsigned d=0; d<hp::Drives; ++d) {
@@ -63,6 +71,24 @@ class FatImages : public hp::Images {
       }
       online_[d]=true;
     }
+    return true;
+  }
+  void unmount() override {
+    // Never f_close/f_sync old objects after card loss: those could write cached
+    // data belonging to the old card onto a newly inserted card.
+    memset(online_,0,sizeof(online_));
+    memset(files_,0,sizeof(files_));
+    config=hp::Config{};
+    if (!SD.end()) (void)BSP_SD_DeInit();
+    fault_=false;
+    strcpy(message,"SD unavailable; waiting to reinitialize");
+  }
+  bool healthy() override { return BSP_SD_GetCardState()==MSD_OK; }
+  bool faulted() const override { return fault_; }
+  uint32_t now_ms(uint32_t) const override { return millis(); }
+  void media_fault() {
+    fault_=true;
+    memset(online_,0,sizeof(online_));
   }
   bool ready(unsigned drive) const override { return online_[drive]; }
   bool read(unsigned d, uint32_t offset, uint8_t *data, unsigned size) override {
@@ -70,7 +96,7 @@ class FatImages : public hp::Images {
     UINT got=0;
     const bool ok=f_lseek(&files_[d],offset)==FR_OK &&
                   f_read(&files_[d],data,size,&got)==FR_OK && got==size;
-    if (!ok) online_[d]=false;
+    if (!ok) media_fault();
     return ok;
   }
   bool write(unsigned d, uint32_t offset, const uint8_t *data, unsigned size) override {
@@ -79,12 +105,13 @@ class FatImages : public hp::Images {
     const bool ok=f_lseek(&files_[d],offset)==FR_OK &&
                   f_write(&files_[d],data,size,&put)==FR_OK && put==size &&
                   f_sync(&files_[d])==FR_OK;
-    if (!ok) online_[d]=false;
+    if (!ok) media_fault();
     return ok;
   }
  private:
   FIL files_[hp::Drives] = {};
   bool online_[hp::Drives] = {};
+  bool fault_=false;
   bool range(unsigned d, uint32_t offset, unsigned size) const {
     return d<hp::Drives && online_[d] && offset<=hp::ImageBytes && size<=hp::ImageBytes-offset;
   }
@@ -93,6 +120,7 @@ class FatImages : public hp::Images {
 static FsmcBus bus;
 static FatImages images;
 static hp::Backend backend(bus,images,&trace);
+static hp::MediaRecovery media(images);
 
 static char report_text[1024];
 static unsigned report_length=0, report_position=0;
@@ -107,6 +135,9 @@ static void append_report(const char *format, ...) {
 static void report() {
   report_length=report_position=0;
   append_report("HP13210 SDIO/FAT disk backend; data=14 command=15 (octal)\r\n%s\r\n",images.message);
+  append_report("SD mounted=%u attempts=%lu failures=%lu removals=%lu\r\n",
+                unsigned(media.mounted()),static_cast<unsigned long>(media.attempts()),
+                static_cast<unsigned long>(media.failures()),static_cast<unsigned long>(media.removals()));
   for (unsigned d=0; d<hp::Drives; ++d) {
     append_report("drive%u %s %s\r\n",d,images.ready(d) ? "READY /images/" : "OFFLINE",images.config.image[d]);
   }
@@ -135,16 +166,23 @@ void setup() {
   digitalWrite(PA1,HIGH);
   Serial.begin(115200);
   trace.push(hp::Event::Boot);
-  images.mount();
   fsmc_init();
   backend.begin();
+  media.begin(millis());
 }
 
 void loop() {
   // No delay(), USB printing, or filesystem calls in per-word protocol steps.
   backend.step(micros());
-  static bool led_active=false;
   const bool active=backend.active();
+  // Only idle recovery may reinitialize FAT or republish all drive status.
+  // begin() resets media quarantine/geometry but preserves diagnostic counters.
+  auto media_change=hp::MediaRecovery::None;
+  if (!active) {
+    media_change=media.step(millis(),false);
+    if (media_change!=hp::MediaRecovery::None) backend.begin();
+  }
+  static bool led_active=false;
   if (active) {
     if (!led_active) digitalWrite(PA1,LOW);
     led_active=true;
@@ -156,7 +194,7 @@ void loop() {
   static char trace_line[5];
   static unsigned trace_length=0, trace_position=0;
   const bool current=bool(Serial);
-  if (current && !connected) report_pending=true;
+  if (current && (!connected || media_change!=hp::MediaRecovery::None)) report_pending=true;
   connected=current;
   if (Serial.available() && Serial.read()=='?') report_pending=true;
   if (current && report_pending && report_position==report_length && trace_position==trace_length) {

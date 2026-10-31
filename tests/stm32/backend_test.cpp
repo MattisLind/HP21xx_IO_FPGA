@@ -669,6 +669,25 @@ static void unsupported_command_tests() {
   assert(f.bus.attention==1);
   assert(f.engine.last_command()==0x3000 && f.engine.last_rar()==0);
 }
+static void media_reattach_tests() {
+  Fixture f;
+  f.images.fail_read=true;
+  f.bus.command(2,0,{0,0,0}); f.engine.step(0);
+  assert(!f.engine.active() && f.engine.errors()==1);
+  assert((f.bus.status[0]&(hp::DataError|hp::Unsafe|hp::NotReady))==
+         (hp::DataError|hp::Unsafe|hp::NotReady));
+  for (auto &online:f.images.online) online=false;
+  f.engine.begin();
+  for (auto value:f.bus.status) assert(value==hp::NotReady);
+  f.images.fail_read=false;
+  f.images.online[0]=true;
+  f.engine.begin();
+  assert(f.engine.errors()==1 && f.engine.commands()==1);
+  assert(f.bus.status[0]==hp::FirstStatus && f.bus.status[1]==hp::NotReady);
+  assert(!f.engine.seek_completion_valid());
+  f.bus.command(2,0,{0,0,0}); f.engine.step(1);
+  assert(f.engine.active() && f.images.reads==2 && f.engine.errors()==1);
+}
 int main() {
   static_assert(hp::ImageBytes==4988928);
   config_tests(); late_word_tests(); response_boundary_tests(); transfer_start_and_service_tests(); jittered_transfer_tests(); startup_seek_tests(); seek_geometry_tests(); seek_busy_recovery_tests(); read_tests(); write_tests();
@@ -676,5 +695,6 @@ int main() {
   reset_and_boundary_tests();
   trace_tests();
   unsupported_command_tests();
+  media_reattach_tests();
   puts("PASS: configuration, geometry, startup/POPIO refresh, concurrent seeks/abort, timer rollover, reads, writes, partial sectors, late-word discard/overrun/sector closing/SD stalls, EOC, media failures, pending commands, autonomous CHECK/48-49 sector boundaries, trace ordering, E01-E10 and queue overflow");
 }

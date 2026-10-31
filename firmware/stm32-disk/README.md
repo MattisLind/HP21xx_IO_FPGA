@@ -46,7 +46,7 @@ offline. Values are unquoted filenames, up to 63 ASCII letters/digits/dots/
 underscores/hyphens, without directory components. Duplicate keys, unknown
 keys, duplicate image names (case insensitive), or malformed configuration
 leave all drives offline. The configuration file is limited to 1024 bytes.
-Edit it on the host and reset the STM32 to reload; there is no hot-swap or
+Edit it on the host and reinsert the card (or reset the STM32) to reload. There is no
 USB mass-storage mode.
 
 Each raw image must be exactly **4,988,928 bytes**:
@@ -103,8 +103,10 @@ The SDIO/FAT libraries are
 [STM32SD 1.5.0](https://github.com/stm32duino/STM32SD/tree/9b9bf7053c1d5b61758bd2fa415669233a7f1229)
 and [FatFs 4.0.4](https://github.com/stm32duino/FatFs/tree/cef1acad37d563e6b7dfd1c4fd3d48e7ff348947).
 [dependencies.json](dependencies.json) pins commits and archive SHA-256 hashes.
-Sources and their licenses are downloaded under `build/stm32-disk/deps/`,
-not vendored into the repository. The build records source/dependency hashes
+Sources and their licenses are downloaded under `build/stm32-disk/deps/`.
+The one local adaptation is `src/sd_diskio.c` (with `src/st_license.txt`): it
+replaces the upstream driver's unbounded post-transfer waits with timeouts and
+makes CTRL_SYNC wait for card readiness. The build records source/dependency hashes
 and the ELF checksum in `build/stm32-disk/success.json`.
 
 Outputs are `build/stm32-disk/firmware/disk_backend.{elf,bin,hex,map}`.
@@ -117,6 +119,41 @@ When eventually loaded, the backend starts automatically without USB/DTR.
 USB CDC sends status on connection or `?`, only while the backend is idle.
 PA1 has the two-second idle heartbeat and lights during active work. The old
 transport test's `t`/`s` commands belong to that separate firmware.
+
+## Startup and card reinsertion
+
+These changes are built and tested offline; hardware acceptance is pending.
+The installed firmware does not gain this behavior until explicitly programmed.
+
+The board reference is the DevEBox STM32F4XX-M. Its
+[original schematic](https://stm32-base.org/assets/pdf/boards/original-schematic-STM32F407VGT6_STM32F4XX_M.pdf)
+shows U5 contact 9 (`NC` / `SD_NC`) without an STM32 GPIO connection.
+`CD/DAT3` on contact 2 is PC11's SDIO data line, not a mechanical detect input.
+This implementation therefore uses software detection and requires no new wire.
+
+The backend starts with all drives not ready and waits 500 ms before the first
+SD/FAT initialization. Failed attempts tear down the filesystem registration and
+SD peripheral before trying again. The first five attempts are separated by
+500 ms; subsequent attempts are separated by two seconds, allowing a card to be
+inserted after startup. Intervals start after each attempt finishes. USB and HP
+status polling continue between attempts. Wait for READY before starting HP tests.
+
+While mounted, a live card-status command runs once per second, only when the
+backend has no transfer, pending command, or seek in progress. An image I/O error
+immediately makes all four images unavailable. At the next idle opportunity,
+either that fault or a failed status probe abandons all old FIL objects, unmounts
+FAT and deinitializes SDIO. No old file is closed or flushed onto a replacement
+card. Recovery reinitializes the card and reloads `/hp13210.cfg` and `/images/`;
+only valid image files return READY. Drive positions, first-status and quarantine
+are reset on attachment, but diagnostic command/error/trace counters are retained.
+The `?` report includes mount attempts, failures, detected losses and mount state.
+
+Software detection is not instantaneous and cannot guarantee observing a very
+brief removal/reinsertion between probes. Stop HP disk activity before removing
+the card: removal during writes can still leave incomplete sectors or FAT damage.
+A buffered read may finish before removal is detected. Low-level block operations
+and card-ready waits are bounded (one second with the current settings); no SD
+status probes or reinitialization calls are added to the per-word handshake path.
 
 ## Short USB operation trace
 
@@ -229,8 +266,9 @@ CSR read acknowledges command IRQ. Capture the report promptly after a failure.
 At startup, valid images clear not-ready and set first-status. Missing images
 remain not-ready. The firmware republishes availability every 10 ms while no
 data transfer is active, because HP POPIO resets the FPGA's status vector too.
-An image I/O error sets data-error/unsafe/not-ready and quarantines that drive
-until STM32 reset. It is not automatically brought back online by this refresh.
+An image I/O error sets data-error/unsafe/not-ready on the affected drive and
+makes all images unavailable. Idle media recovery, rather than this status
+refresh, tears down and reopens the card before clearing media quarantine.
 
 A 12 KiB buffer holds the remaining part of a two-head cylinder. SD reads occur
 before a read stream; writes and `f_sync` occur after collecting a write stream.

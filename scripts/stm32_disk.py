@@ -107,6 +107,16 @@ def test():
          SOURCE/'src/backend.cpp', SOURCE/'src/config.cpp',
          ROOT/'tests/stm32/backend_test.cpp', '-o', executable])
     run([executable])
+    media_test = folder / 'media-test'
+    run(['c++', '-std=c++17', '-Wall', '-Wextra', '-Werror', '-g',
+         '-fsanitize=address,undefined', '-I'+str(SOURCE/'src'),
+         ROOT/'tests/stm32/media_test.cpp', '-o', media_test])
+    run([media_test])
+    disk_test = folder / 'sd-diskio-test'
+    run(['cc', '-std=c11', '-Wall', '-Wextra', '-Werror', '-g',
+         '-fsanitize=address,undefined', '-I'+str(ROOT/'tests/stm32/sd_stub'),
+         SOURCE/'src/sd_diskio.c', ROOT/'tests/stm32/sd_diskio_test.c', '-o', disk_test])
+    run([disk_test])
 
 
 def program():

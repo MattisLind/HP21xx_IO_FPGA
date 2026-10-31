@@ -4,6 +4,133 @@ Updated **2026-10-29**, Europe/Stockholm. Read this first when continuing on the
 laptop beside the HP 2100. This is a summary of the conversation and actual
 bring-up state; some older README status paragraphs describe earlier stages.
 
+## BOTH failed: preserved SWD/JTAG capture — 2026-10-30, latest
+
+User explicitly requested inspection while both hung. NO reset, FPGA load, or
+flash write. Xilinx dongle firmware initialized only. STM briefly halted for
+register/dump capture, then resumed original HardFault loop.
+Evidence build/startup-hang/20261030T215031Z/{result.json,swd.log,jtag.log,
+sram.bin,ccm.bin,flash.bin,inspect.tcl}. Complete STM BIN matches installed
+candidate. Same early HardFault: PC080094c8, CFSR1/HFSR40000000,
+nested PCbe18cf86 (previous ba18cf86), outer PC08009630 in USB-init delay.
+Media object unconstructed; SDIO all0. VTOR/vectors valid, BOR OFF.
+FPGA IRcapture11, STAT0205: DONE0, INIT_B0, CRC_ERROR1, ID_ERROR0,
+mode MasterSPI. This is a configuration CRC failure, not a controller LED fault.
+Current ST-Link Vtarget3.276V is not a startup waveform measurement.
+Both devices deliberately left in original failed states pending next step.
+Common supply/reset problem remains hypothesis; need startup rail/reset captures.
+
+## Widespread cold-start failures / power investigation — 2026-10-30
+
+User reports most power cycles fail FPGA, STM32, or both; both starting is rare,
+but normal operation works once started. Both use shared supply from HP; voltage
+not yet confirmed. USB disconnected during latest tests, so USB backfeed is not
+the explanation for those runs. Shared supply/reset timing is a hypothesis,
+not established. Read-only ST-Link check (NO halt/reset/setting changes):
+FLASH_OPTCR0x0fffaaed -> BOR_LEV0x0c = OB_BOR_OFF per ST HAL header;
+RCC_CSR0x0e000000. Log build/sd-media-recovery/read-power-config.log.
+Need confirm HP rail/input wiring, delayed reset experiment, scope local rails
+and NRST/FPGA PROGRAM_B, INIT_B, DONE. No BOR option changes made.
+AMD UG380 power-on precautions explicitly cover FPGA starting before SPI flash
+is ready, including different regulator ramps from a common supply.
+
+## Cold-start HardFault after SD recovery install — 2026-10-30, latest
+
+User power cycle produced no STM32 CDC port (ST-Link still visible). Brief halt,
+NO reset, captured full128KiB SRAM and registers in build/sd-media-recovery/.
+CPU HardFault PC080094c8, MSP2001ff80; CFSR1 (IACCVIOL), HFSR40000000.
+Nested frame PCba18cf86/xPSR8100000f, outer PC08009630 (delay reached via
+USBD_LL_Init/CDC_init during premain). MediaRecovery object still zero/unconstructed;
+SD retries had not started. Active VTOR08000000 and vectors valid. Entire installed
+BIN verified against ready image. Exact cause of early fault NOT established.
+Preserved cold-full-sram.bin, inspect-cold/fault/vectors.log, cold-fault-result.json.
+Warm reset only (no reflash/FPGA changes) restored CDC and SD: attempts1/failures0,
+all4READY, errors0. Status cold-fault-warm-reset-status.txt. USB opened briefly
+then closed; HP serial untouched. MCU now running; user has not rerun diagnostics.
+Do not claim software SD retries solve this separate early cold-start HardFault.
+
+## SD recovery firmware INSTALLED — 2026-10-30, latest
+
+User confirmed HP halted and explicitly requested programming. Full512KiB previous
+STM32 flash backed up and verified by stm32_disk.py program; new ELF
+b30734fe203fe91782d34b88a213d09d01356d73645f18d2570849ef1c2534a5
+programmed, verified OK, reset/run. BIN74c4fab63a17a4fc396557e9a9033bdf25e86f4b2ee3d1d0aed29ba718ab34fc.
+USB startup: SD mounted1, attempts1/failures0/removals0; all4READY;
+commands/errors/trace_dropped0. Boot traces N0..N3 then SD/CF/R0..R3 confirm
+initial offline-to-ready publication. STM32 USB opened briefly for status and
+closed afterward; HP serial port untouched. No FPGA access or SPI changes.
+Receipts build/stm32-disk/programmed.json and build/sd-media-recovery/installed.json;
+startup transcript build/sd-media-recovery/installed-startup-status.txt.
+Candidate tests below passed before install. Cold power-cycle and physical card
+removal/reinsertion acceptance are still PENDING; no HP diagnostic on new firmware yet.
+
+## SD recovery candidate preparation — 2026-10-30 (subsequently installed above)
+
+User approved startup retries and software-only card removal/reinsertion recovery.
+Serial ports were explicitly disconnected before the latest power cycle and stay
+closed until requested; user reports that latest power cycle worked.
+No STM32 schematic was present in this checkout; original DevEBox schematic
+retrieved via the existing board reference and saved under
+build/reference/stm32-board/DevEBox-STM32F4XX-M.pdf. U5 contact9 SD_NC is not routed
+to MCU GPIO. Contact2 CD/DAT3 is PC11 SD data, not mechanical card detection.
+Candidate adds idle-only SD status probes, startup delay and retry backoff,
+FAT/SD teardown with stale FIL objects abandoned, config/image reopen on insertion,
+and bounded post-transfer waits via local adapted sd_diskio.c. Installed firmware
+and SPI image are untouched. See firmware/stm32-disk/README.md for timing/limits.
+Original build artifacts preserved under build/sd-media-recovery/before-build/;
+installed known-good 4MHz artifacts still build/step47-investigation/sdio4-ready/.
+Final ARM build and ASan/UBSan backend/recovery/SD-driver tests PASS.
+Ready artifacts build/sd-media-recovery/ready/; result.json records hashes.
+Build uses PATH to build/stm32-tools/python/cmake/data/bin and PYTHON=
+build/stm32-tools/python-runtime/cpython-3.12.15-linux-x86_64-gnu/bin/python3.
+No hardware testing of recovery yet. Never remove media during HP writes as a
+routine test; use stopped HP and disposable images for reinsertion acceptance.
+
+## Cold-power diagnostic E50 — 2026-10-30, later update
+
+User power-cycled, then reported E50 UNIT0 MISSING-PRESENT NONE twice.
+This cold boot SUCCEEDED for FPGA: read-only JTAG STAT373c, DONE high, without
+FPGA reload, reset, or flash write. Xilinx dongle RAM firmware alone initialized.
+STM32 USB reports SD/FAT mount failed, E11, all4OFFLINE, commands/errors0.
+Firmware setup calls images.mount() once; no automatic retry. Reset STM32 only
+while HP halted at E50: FAT mounted, all4READY, commands/errors/dropped0.
+FPGA remained untouched throughout. This establishes a cold-start SD mount
+problem; readiness/power timing is plausible but exact cause unproven.
+Evidence build/spi-mailboxes/cold-boot-result.json and cold-sd-retry-status.txt.
+Current STM32 running/all4READY; restart diagnostic P002000/S000000 when ready.
+Earlier failed boot attempts below remain historical; this new cold boot passed.
+
+## Current hardware — 2026-10-30 SPI installation
+
+Latest mailbox controller b19233751b4501c24df062d1f8ee6b5ee5a651f0ed7983794017609db39d1810
+is now programmed in SPI flash and independently verified. Full pre-write 2 MiB
+backup and verification logs: build/spi-mailboxes/install-20261030T191239Z/.
+The complete controller flash payload also matched byte for byte after power cycling.
+Standard xc3sprog -R (IPROG) left DONE low, STAT1204, FSMCFFFF. User cold power
+cycle also produced no LED heartbeat. Original blink rebuilt and passed SRAM
+(user confirmed blinking); its verified flash image failed standard -R too.
+Direct JPROGRAM reset succeeded for blink and subsequently for the restored latest
+controller flash image: STAT373c, DONE high, scratch/attention FSMC checks PASS.
+Temporary utility source/binary: build/spi-mailboxes/jprogram-status{.cpp,}; -c xpc -R
+uses JPROGRAM, NOT the standard IPROG sequence. No production programmer changes.
+Cold power-on failure remains unexplained and has NOT been retested after this.
+
+Controller was booted clean again via JPROGRAM and STM32 reset/run. FAT mounted,
+all four drives READY, commands/errors/dropped0, CSR/request/command/RAR0,
+last_error none, verified through USB status twice. STM32 firmware unchanged.
+Serial capture PID7969 reconnects both ports; logs build/serial-logs/20261030T191053Z/.
+HP FTDI AH01E1EM at2400/7E2; STM32 CDC at115200/8N1. Xilinx RAM cable firmware
+initialized after reconnect with Linux fxload -t fx2 -D <discovered USB node> -I
+build/firmware/xusb_emb.hex. Reidentify USB nodes each time.
+Receipt build/spi-mailboxes/controller-installed.json. HP diagnostic rerun started at P002000/S000000 with data14/command15.
+Captured LONG PASS0001, heads0/1, unit00, 0000errors. User subsequently
+reported stopped. No second PASS or HP error captured. Final USB status: all4READY,
+commands68299, backend errors4, last_errorE06 (cylinder mismatch),
+trace_dropped310302 (E99 trace overflow), READmax6us/WRITEmax13us.
+These backend counters do not replace the HP diagnostic verdict. Final transcripts
+under build/spi-mailboxes/diagnostic-final-*.txt; neither board reset afterward. Keep cold boot issue separate
+from diagnostic acceptance. STM32 is RUNNING, not halted.
+
 ## Current hardware and capture — 2026-10-29
 
 ### Experimental mailbox FPGA PASSED; code review completed
