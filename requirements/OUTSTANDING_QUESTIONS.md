@@ -1,5 +1,25 @@
 # Outstanding questions
 
+## Q-08: Integrated PCB design review
+
+The current design is [INTEGRATED_BOARD_DESIGN.md](INTEGRATED_BOARD_DESIGN.md),
+revision **0.6, 2026-11-01**. Review precedes the integrated-board schematic.
+The document defines component selections, complete Usage-labelled pin maps,
+SWD-only MCU debug, the single `HP21xx_IO_FPGA.cfg` structure, HSWAPEN low,
+SUSPEND grounded and the PB0 VBUS divider. The supplied `IOB Proto Board`
+KiCad project is the mechanical input for layout, including 1.6 mm wire-wrap
+pads and 0.8 mm drills. AUX1/P67↔PB8 and AUX2/P74↔PB9 are fitted. PA4/PA5
+are uncommitted; there is no X/Y display requirement. Shared-clock, buck
+inductor/capacitor/feedback selections, 2.54 mm headers, 4P4C jack and spare
+RS-232 routing are recorded in the design. Stock counts are not tracked.
+
+Use **[section 5: Open issues](INTEGRATED_BOARD_DESIGN.md#5-open-issues)** for
+the consolidated hardware/software review list. Supporting
+[power calculations](INTEGRATED_BOARD_POWER.md),
+[component list](INTEGRATED_BOARD_BOM.csv),
+[STM32 pins](INTEGRATED_BOARD_STM32_PINS.csv) and
+[FPGA pins](INTEGRATED_BOARD_FPGA_PINS.csv) are saved alongside it.
+
 ## Q-07: STM32 FAT disk backend
 
 Status: disk backend programmed and verified through ST-Link on 2026-10-25,

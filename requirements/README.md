@@ -2,8 +2,32 @@
 
 Initial requirements baseline: 2026-10-16.
 
+For the **integrated PCB**, read the [design review](INTEGRATED_BOARD_DESIGN.md),
+revision **0.6, 2026-11-01**. It defines the current component selections and
+pin allocation, four-sheet organization, split supplies/reset, Ethernet,
+USB-C/SD, RS-232 pendant, SWD-only MCU debug, FPGA JTAG and expansion area.
+All 100 STM32 and 144 FPGA package pins have a high-level **Usage** category.
+With active FSMC and fitted AUX1/AUX2, the MCU has **20 available plus five
+conditional expansion GPIOs**, including PA4/PA5 for analog or digital use.
+The board uses one shared 50 MHz oscillator/fan-out, selected buck support
+parts, 2.54 mm programming headers and a right-angle 4P4C pendant jack.
+Wire-wrap pads/drills match the prototype: **1.6 mm / 0.8 mm**. HSWAPEN and
+SUSPEND are grounded.
+
+The loader and application share **`/HP21xx_IO_FPGA.cfg`**. Application settings
+are in the section selected by `name`, e.g. `[hp13210]`. Remaining decisions
+and verification work are consolidated in
+[section 5: Open issues](INTEGRATED_BOARD_DESIGN.md#5-open-issues).
+See the [power calculations](INTEGRATED_BOARD_POWER.md),
+[component list](INTEGRATED_BOARD_BOM.csv),
+[STM32 pin CSV](INTEGRATED_BOARD_STM32_PINS.csv) and
+[FPGA pin CSV](INTEGRATED_BOARD_FPGA_PINS.csv).
+Use the supplied [prototype KiCad board](../IOB%20Proto%20Board/IOB%20Proto%20Board.kicad_pcb)
+as the mechanical reference for layout. The carrier-board requirements below
+remain a separate prototype reference.
+
 For current bring-up state and continuation on another computer, read the
-[Codex handover](../HANDOVER.md), updated 2026-10-25. It distinguishes installed
+[Codex handover](../HANDOVER.md), updated 2026-11-01. It distinguishes installed
 firmware from offline fixes and lists migration files and next diagnostic steps.
 
 Build an HP 21xx I/O board that implements an HP 13210 disk interface using
@@ -15,6 +39,11 @@ simple LED blink design on the FPGA.
 
 | Source | Purpose |
 | --- | --- |
+| [Integrated-board design review](INTEGRATED_BOARD_DESIGN.md) | Current new-PCB architecture, reset and pin allocations, boot/recovery plan, and open design decisions. |
+| [Integrated-board power/parts review](INTEGRATED_BOARD_POWER.md) | Pull-up/regulator calculations, split MCU power, selected regulator support parts, supply calculations and component data sheets. |
+| [Integrated-board component list](INTEGRATED_BOARD_BOM.csv) | Selected components and LCSC codes; not yet an assembly BOM with designators. |
+| [STM32 complete package-pin inventory](INTEGRATED_BOARD_STM32_PINS.csv) | Current allocation and Usage categories for all 100 pads, including RMII, DAC and spare/conditional GPIO. |
+| [FPGA complete package-pin inventory](INTEGRATED_BOARD_FPGA_PINS.csv) | All 144 pads, supplies/configuration pins, Usage categories and expansion availability. |
 | [HP 21xx IO bus.xlsx](HP%2021xx%20IO%20bus.xlsx) | HP bus signals, directions, and FPGA pin mapping. |
 | [STM32F407VET.xlsx](STM32F407VET.xlsx) | STM32-to-FPGA pin mapping, including the FSMC bus. |
 | [13210-90003 hardware manual](13210-90003_13210A_Disc_Drive_Interface_Kit_May78.pdf) | Original interface theory and schematics; figure 5-2 contains selection, flags and SKF. |

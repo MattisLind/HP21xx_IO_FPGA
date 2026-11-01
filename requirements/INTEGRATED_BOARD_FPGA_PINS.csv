@@ -1,0 +1,145 @@
+Package_pin,Pin_name,Usage,Function,Direction,Status,Expansion,Notes
+1,IO_P1,HP-BUS,HP IOB2 TX; HP contact 41,O,Allocated,No,
+2,IO_P2,HP-BUS,HP IOB1 TX; HP contact 38,O,Allocated,No,
+3,GND,POWER,GND,Power,Required supply,No,Connect every package supply/ground pin
+4,VCCO_3,POWER,+3V3_HP,Power,Required supply,No,Connect every package supply/ground pin
+5,IO_P5,HP-BUS,HP SCM_H; HP contact 37,I,Allocated,No,
+6,IO_P6,HP-BUS,HP IOB0 TX; HP contact 35,O,Allocated,No,
+7,IO_P7,HP-BUS,HP SCL_H; HP contact 34,I,Allocated,No,
+8,IO_P8,HP-BUS,HP IRQH; HP contact 33,O,Allocated,No,
+9,IO_P9,HP-BUS,HP SIR; HP contact 32,I,Allocated,No,
+10,IO_P10,HP-BUS,HP IOB10 RX; HP contact 31,I,Allocated,No,
+11,IO_P11,HP-BUS,HP IOB2 RX; HP contact 30,I,Allocated,No,
+12,IO_P12,HP-BUS,HP IOB1 RX; HP contact 29,I,Allocated,No,
+13,GND,POWER,GND,Power,Required supply,No,Connect every package supply/ground pin
+14,IO_P14,HP-BUS,HP IOB9 RX; HP contact 28,I,Allocated,No,
+15,IO_P15,HP-BUS,HP IOB8 RX; HP contact 27,I,Allocated,No,
+16,IO_P16,HP-BUS,HP IOB0 RX; HP contact 26,I,Allocated,No,
+17,IO_P17,HP-BUS,HP SFS; HP contact 25,I,Allocated,No,
+18,VCCO_3,POWER,+3V3_HP,Power,Required supply,No,Connect every package supply/ground pin
+19,VCCINT,POWER,+1V2_FPGA,Power,Required supply,No,Connect every package supply/ground pin
+20,VCCAUX,POWER,+3V3_HP,Power,Required supply,No,Connect every package supply/ground pin
+21,IO_P21,HP-BUS,HP IOI; HP contact 24,I,Allocated,No,
+22,IO_P22,HP-BUS,HP PRH; HP contact 23,I,Allocated,No,
+23,IO_P23,HP-BUS,HP STC; HP contact 22,I,Allocated,No,
+24,IO_P24,HP-BUS,HP CLC; HP contact 21,I,Allocated,No,
+25,GND,POWER,GND,Power,Required supply,No,Connect every package supply/ground pin
+26,IO_P26,HP-BUS,HP IOO; HP contact 20,I,Allocated,No,
+27,IO_P27,HP-BUS,HP SRQ; HP contact 19,O,Allocated,No,
+28,VCCINT,POWER,+1V2_FPGA,Power,Required supply,No,Connect every package supply/ground pin
+29,IO_P29,HP-BUS,HP IOB16_OR_BIOS_N; HP contact 18,I,Allocated,No,
+30,IO_P30,HP-BUS,HP POPIO; HP contact 17,I,Allocated,No,
+31,VCCO_3,POWER,+3V3_HP,Power,Required supply,No,Connect every package supply/ground pin
+32,IO_P32,HP-BUS,HP SCL_L; HP contact 16,I,Allocated,No,
+33,IO_P33,HP-BUS,HP IOG; HP contact 15,I,Allocated,No,
+34,IO_P34,HP-BUS,HP SCM_L; HP contact 14,I,Allocated,No,
+35,IO_P35,HP-BUS,HP CRS; HP contact 13,I,Allocated,No,
+36,VCCAUX,POWER,+3V3_HP,Power,Required supply,No,Connect every package supply/ground pin
+37,PROGRAM_B,CONFIGURATION,Conditioned PON reset,I,Required reset,No,
+38,CSO_B,CONFIGURATION,Flash /CS pin1,O,Required configuration,No,
+39,INIT_B,CONFIGURATION,"Configuration status, FPGA-rail pull-up and probe access",I / open-drain O,Reserved status,No,
+40,IO_P40,HP-BUS,HP SKF; HP contact 12,O,Allocated,No,
+41,IO_P41,HP-BUS,HP T3; HP contact 11,I,Allocated,No,
+42,VCCO_2,POWER,+3V3_HP,Power,Required supply,No,Connect every package supply/ground pin
+43,IO_P43,HP-BUS,HP IAK; HP contact 10,I,Allocated,No,
+44,IO_P44,HP-BUS,HP STF; HP contact 9,I,Allocated,No,
+45,IO_P45,HP-BUS,HP IEN; HP contact 8,I,Allocated,No,
+46,IO_P46,HP-BUS,HP CLF; HP contact 7,I,Allocated,No,
+47,IO_P47,HP-BUS,HP IRQL; HP contact 6,O,Allocated,No,
+48,IO_P48,HP-BUS,HP SFC; HP contact 5,I,Allocated,No,
+49,GND,POWER,GND,Power,Required supply,No,Connect every package supply/ground pin
+50,IO_P50,HP-BUS,HP FLGL; HP contact 4,O,Allocated,No,
+51,IO_P51,HP-BUS,HP PRL; HP contact 3,O,Allocated,No,
+52,VCCINT,POWER,+1V2_FPGA,Power,Required supply,No,Connect every package supply/ground pin
+53,VCCAUX,POWER,+3V3_HP,Power,Required supply,No,Connect every package supply/ground pin
+54,GND,POWER,GND,Power,Required supply,No,Connect every package supply/ground pin
+55,IO_P55,HP-BUS,HP IOB9 TX; HP contact 56,O,Allocated,No,
+56,IO_P56,OTHER,Shared 50MHz reference from CDCLVC1104 Y0,I,Allocated,No,
+57,IO_P57,HP-BUS,HP IOB4 TX; HP contact 42,O,Allocated,No,
+58,IO_P58,HP-BUS,HP IOB12 TX; HP contact 57,O,Allocated,No,
+59,IO_P59,UNCOMMITTED,Uncommitted GPIO,I/O,Available,Yes,
+60,M1,CONFIGURATION,Master SPI strap low,I,Required strap,No,
+61,IO_P61,UNCOMMITTED,Uncommitted GPIO,I/O,Available,Yes,
+62,IO_P62,UNCOMMITTED,Uncommitted GPIO,I/O,Available,Yes,
+63,VCCO_2,POWER,+3V3_HP,Power,Required supply,No,Connect every package supply/ground pin
+64,MOSI,CONFIGURATION,Flash DI/IO0 pin5,O,Required configuration,No,
+65,DIN,CONFIGURATION,Flash DO/IO1 pin2,I,Required configuration,No,
+66,IO_P66,UNCOMMITTED,Uncommitted GPIO,I/O,Available,Yes,
+67,IO_P67,FPGA-CONTROL,AUX1 ↔ STM32 PB8,I/O,Allocated,Conditional,Fitted MCU/FPGA connection; no IRQ/DRQ function assigned; expansion use requires release by both ends
+68,GND,POWER,GND,Power,Required supply,No,Connect every package supply/ground pin
+69,M0,CONFIGURATION,Master SPI strap high,I,Required strap,No,
+70,CCLK,CONFIGURATION,Flash CLK pin6,O,Required configuration,No,
+71,DONE,CONFIGURATION,STM32 PE3; FPGA-side pull-up,I/O,Reserved status,No,
+72,CMPCS_B,CONFIGURATION,Reserved: leave NC or vendor-approved bias,Reserved,Required reserved treatment,No,
+73,SUSPEND,CONFIGURATION,Tie GND when unused,I,Required strap,No,
+74,IO_P74,FPGA-CONTROL,AUX2 ↔ STM32 PB9,I/O,Allocated,Conditional,Fitted MCU/FPGA connection; no IRQ/DRQ function assigned; expansion use requires release by both ends
+75,IO_P75,FPGA-FSMC,FSMC_NADV ↔ STM32 PB7,I,Allocated,Conditional,19-wire bus: reuse only after complete MCU release
+76,VCCO_1,POWER,+3V3_HP,Power,Required supply,No,Connect every package supply/ground pin
+77,GND,POWER,GND,Power,Required supply,No,Connect every package supply/ground pin
+78,IO_P78,FPGA-FSMC,FSMC_NWE ↔ STM32 PD5,I,Allocated,Conditional,19-wire bus: reuse only after complete MCU release
+79,IO_P79,FPGA-FSMC,FSMC_NOE ↔ STM32 PD4,I,Allocated,Conditional,19-wire bus: reuse only after complete MCU release
+80,IO_P80,FPGA-FSMC,FSMC_AD15 ↔ STM32 PD10,I/O,Allocated,Conditional,19-wire bus: reuse only after complete MCU release
+81,IO_P81,FPGA-FSMC,FSMC_AD14 ↔ STM32 PD9,I/O,Allocated,Conditional,19-wire bus: reuse only after complete MCU release
+82,IO_P82,FPGA-FSMC,FSMC_AD13 ↔ STM32 PD8,I/O,Allocated,Conditional,19-wire bus: reuse only after complete MCU release
+83,IO_P83,FPGA-FSMC,FSMC_AD12 ↔ STM32 PE15,I/O,Allocated,Conditional,19-wire bus: reuse only after complete MCU release
+84,IO_P84,FPGA-FSMC,FSMC_AD11 ↔ STM32 PE14,I/O,Allocated,Conditional,19-wire bus: reuse only after complete MCU release
+85,IO_P85,FPGA-FSMC,FSMC_AD10 ↔ STM32 PE13,I/O,Allocated,Conditional,19-wire bus: reuse only after complete MCU release
+86,VCCO_1,POWER,+3V3_HP,Power,Required supply,No,Connect every package supply/ground pin
+87,IO_P87,FPGA-FSMC,FSMC_AD9 ↔ STM32 PE12,I/O,Allocated,Conditional,19-wire bus: reuse only after complete MCU release
+88,IO_P88,FPGA-FSMC,FSMC_AD8 ↔ STM32 PE11,I/O,Allocated,Conditional,19-wire bus: reuse only after complete MCU release
+89,VCCINT,POWER,+1V2_FPGA,Power,Required supply,No,Connect every package supply/ground pin
+90,VCCAUX,POWER,+3V3_HP,Power,Required supply,No,Connect every package supply/ground pin
+91,GND,POWER,GND,Power,Required supply,No,Connect every package supply/ground pin
+92,IO_P92,FPGA-FSMC,FSMC_AD7 ↔ STM32 PE10,I/O,Allocated,Conditional,19-wire bus: reuse only after complete MCU release
+93,IO_P93,FPGA-FSMC,FSMC_AD6 ↔ STM32 PE9,I/O,Allocated,Conditional,19-wire bus: reuse only after complete MCU release
+94,IO_P94,FPGA-FSMC,FSMC_AD5 ↔ STM32 PE8,I/O,Allocated,Conditional,19-wire bus: reuse only after complete MCU release
+95,IO_P95,FPGA-FSMC,FSMC_AD4 ↔ STM32 PE7,I/O,Allocated,Conditional,19-wire bus: reuse only after complete MCU release
+96,GND,POWER,GND,Power,Required supply,No,Connect every package supply/ground pin
+97,IO_P97,FPGA-FSMC,FSMC_AD3 ↔ STM32 PD1,I/O,Allocated,Conditional,19-wire bus: reuse only after complete MCU release
+98,IO_P98,FPGA-FSMC,FSMC_AD2 ↔ STM32 PD0,I/O,Allocated,Conditional,19-wire bus: reuse only after complete MCU release
+99,IO_P99,FPGA-FSMC,FSMC_AD1 ↔ STM32 PD15,I/O,Allocated,Conditional,19-wire bus: reuse only after complete MCU release
+100,IO_P100,FPGA-FSMC,FSMC_AD0 ↔ STM32 PD14,I/O,Allocated,Conditional,19-wire bus: reuse only after complete MCU release
+101,IO_P101,HP-BUS,HP IOB7 RX; HP contact 84,I,Allocated,No,
+102,IO_P102,HP-BUS,HP IOB15 RX; HP contact 83,I,Allocated,No,
+103,VCCO_1,POWER,+3V3_HP,Power,Required supply,No,Connect every package supply/ground pin
+104,IO_P104,HP-BUS,HP IOB14 RX; HP contact 82,I,Allocated,No,
+105,IO_P105,HP-BUS,HP IOB6 RX; HP contact 81,I,Allocated,No,
+106,TDO,JTAG,STM32 PC3 and 14-pin header pin8,O,JTAG,No,
+107,TMS,JTAG,STM32 PE2; header pin4,I,JTAG,No,
+108,GND,POWER,GND,Power,Required supply,No,Connect every package supply/ground pin
+109,TCK,JTAG,STM32 PC0 and header pin6,I,JTAG,No,
+110,TDI,JTAG,STM32 PC2 and header pin10,I,JTAG,No,
+111,IO_P111,HP-BUS,HP IOB5 RX; HP contact 80,I,Allocated,No,
+112,IO_P112,HP-BUS,HP IOB13 RX; HP contact 79,I,Allocated,No,
+113,GND,POWER,GND,Power,Required supply,No,Connect every package supply/ground pin
+114,IO_P114,HP-BUS,HP IOB12 RX; HP contact 78,I,Allocated,No,
+115,IO_P115,HP-BUS,HP IOB4 RX; HP contact 77,I,Allocated,No,
+116,IO_P116,HP-BUS,HP IOB15 TX; HP contact 74,O,Allocated,No,
+117,IO_P117,HP-BUS,HP SFSB_OR_BIOI_N; HP contact 73,I,Allocated,No,
+118,IO_P118,HP-BUS,HP BIOO_N; HP contact 67,I,Allocated,No,
+119,IO_P119,HP-BUS,HP PON; HP contact 66,I,Allocated,No,
+120,IO_P120,HP-BUS,HP IOB14 TX; HP contact 65,O,Allocated,No,
+121,IO_P121,HP-BUS,HP IOB3 RX; HP contact 64,I,Allocated,No,
+122,VCCO_0,POWER,+3V3_HP,Power,Required supply,No,Connect every package supply/ground pin
+123,IO_P123,HP-BUS,HP EDT; HP contact 62,I,Allocated,No,
+124,IO_P124,HP-BUS,HP IOB13 TX; HP contact 61,O,Allocated,No,
+125,VCCO_0,POWER,+3V3_HP,Power,Required supply,No,Connect every package supply/ground pin
+126,IO_P126,HP-BUS,HP IOB11 RX; HP contact 60,I,Allocated,No,
+127,IO_P127,HP-BUS,HP IOB10 TX; HP contact 58,O,Allocated,No,
+128,VCCINT,POWER,+1V2_FPGA,Power,Required supply,No,Connect every package supply/ground pin
+129,VCCAUX,POWER,+3V3_HP,Power,Required supply,No,Connect every package supply/ground pin
+130,GND,POWER,GND,Power,Required supply,No,Connect every package supply/ground pin
+131,IO_P131,HP-BUS,HP IOB11 TX; HP contact 55,O,Allocated,No,
+132,IO_P132,HP-BUS,HP IOB8 TX; HP contact 54,O,Allocated,No,
+133,IO_P133,HP-BUS,HP IOB6 TX; HP contact 53,O,Allocated,No,
+134,IO_P134,HP-BUS,HP IOB7 TX; HP contact 52,O,Allocated,No,
+135,VCCO_0,POWER,+3V3_HP,Power,Required supply,No,Connect every package supply/ground pin
+136,GND,POWER,GND,Power,Required supply,No,Connect every package supply/ground pin
+137,IO_P137,HP-BUS,HP IOB5 TX; HP contact 51,O,Allocated,No,
+138,IO_P138,HP-BUS,HP RUN_DRIVE; HP contact 50,O,Allocated,No,
+139,IO_P139,HP-BUS,HP RUN; HP contact 50,I,Allocated,No,
+140,IO_P140,HP-BUS,HP FLGH; HP contact 49,O,Allocated,No,
+141,IO_P141,HP-BUS,HP ENF; HP contact 46,I,Allocated,No,
+142,IO_P142,HP-BUS,HP IOB3 TX; HP contact 45,O,Allocated,No,
+143,IO_P143,OTHER,Active-high FPGA LED,O,Allocated,No,
+144,HSWAPEN,CONFIGURATION,Tie GND; enable pre-configuration weak pull-ups,I,Required startup bias,No,

@@ -1,0 +1,101 @@
+Package_pin,Pin_name,Usage,Function,Direction,Status,Expansion,Notes
+1,PE2,FPGA-JTAG,FPGA_TMS,O,Allocated,No,FPGA TMS; parallel trace disabled; idle/DEV input without pulls
+2,PE3,FPGA-STATUS,FPGA_DONE,I,Allocated,No,FPGA DONE input; FPGA-side pull-up; parallel trace disabled
+3,PE4,LED,MCU_LED_N,O,Allocated,No,Active-low MCU LED; parallel trace disabled
+4,PE5,ETHERNET,ETH_PHY_RESET_N,O (open drain),Allocated,No,HP-side pull-up; hardware power-on reset timing required; trace disabled
+5,PE6,UNCOMMITTED,Spare GPIO,I/O,Available,Yes,General GPIO; alternate functions per ST table — TIM9_CH2
+6,VBAT,POWER,Backup supply; tie to MCU rail if no battery,Power,Required support,No,Not expansion I/O
+7,PC13,UNCOMMITTED,Spare GPIO,I/O,Conditional,Conditional,Backup-domain pin: drive/speed restrictions apply
+8,PC14,UNCOMMITTED,Spare GPIO,I/O,Conditional,Conditional,"LSE crystal pin; GPIO only if RTC crystal unused, restricted drive"
+9,PC15,UNCOMMITTED,Spare GPIO,I/O,Conditional,Conditional,"LSE crystal pin; GPIO only if RTC crystal unused, restricted drive"
+10,VSS,POWER,Ground,Power,Required support,No,Connect every VSS pin
+11,VDD,POWER,+3V3_MCU; all pins connected and locally decoupled,Power,Required support,No,Not expansion I/O
+12,PH0,CLOCK,HSE_OSC_IN,Analog I,Required clock,No,8MHz crystal
+13,PH1,CLOCK,HSE_OSC_OUT,Analog O,Required clock,No,8MHz crystal
+14,NRST,RESET,MCU reset button and power-aware PON reset branch,I,Required support,No,Not expansion I/O
+15,PC0,FPGA-JTAG,FPGA_TCK,O,Allocated,No,JTAG idle/DEV: input without pulls
+16,PC1,ETHERNET,ETH_MDC,O,Allocated,No,AF11; HP-powered PHY domain; release outputs on USB-only power
+17,PC2,FPGA-JTAG,FPGA_TDI,O,Allocated,No,JTAG idle/DEV: input without pulls
+18,PC3,FPGA-JTAG,FPGA_TDO,I,Allocated,No,JTAG idle/DEV: input without pulls
+19,VDD,POWER,+3V3_MCU; all pins connected and locally decoupled,Power,Required support,No,Not expansion I/O
+20,VSSA,POWER,Analog ground,Power,Required support,No,Not expansion I/O
+21,VREF+,POWER,Analog reference; filtered MCU analog rail,Power,Required support,No,Not expansion I/O
+22,VDDA,POWER,Analog supply; filtered +3V3_MCU,Power,Required support,No,Not expansion I/O
+23,PA0,POWER-SENSE,HP_POWER_PRESENT_N,I,Allocated,No,"NPN detector, active low; also hardware HP_ABSENT for reset logic"
+24,PA1,ETHERNET,ETH_RMII_REF_CLK,I,Allocated,No,AF11; HP-powered PHY domain; release outputs on USB-only power
+25,PA2,ETHERNET,ETH_MDIO,I/O,Allocated,No,AF11; HP-powered PHY domain; release outputs on USB-only power
+26,PA3,UNCOMMITTED,Spare GPIO,I/O,Available,Yes,"General GPIO; alternate functions per ST table — ADC1_IN3, ADC2_IN3, ADC3_IN3, TIM2_CH4"
+27,VSS,POWER,Ground,Power,Required support,No,Connect every VSS pin
+28,VDD,POWER,+3V3_MCU; all pins connected and locally decoupled,Power,Required support,No,Not expansion I/O
+29,PA4,UNCOMMITTED,Uncommitted GPIO / DAC_OUT1,I/O / Analog O,Available,Yes,General expansion pin; optional native 12-bit DAC channel 1; no dedicated analog application
+30,PA5,UNCOMMITTED,Uncommitted GPIO / DAC_OUT2,I/O / Analog O,Available,Yes,General expansion pin; optional native 12-bit DAC channel 2; no dedicated analog application
+31,PA6,UNCOMMITTED,Spare GPIO,I/O,Available,Yes,"General GPIO; alternate functions per ST table — ADC1_IN6, ADC2_IN6, SPI1_MISO, TIM13_CH1"
+32,PA7,ETHERNET,ETH_RMII_CRS_DV,I,Allocated,No,AF11; HP-powered PHY domain; release outputs on USB-only power
+33,PC4,ETHERNET,ETH_RMII_RXD0,I,Allocated,No,AF11; HP-powered PHY domain; release outputs on USB-only power
+34,PC5,ETHERNET,ETH_RMII_RXD1,I,Allocated,No,AF11; HP-powered PHY domain; release outputs on USB-only power
+35,PB0,POWER-SENSE,USB_VBUS_PRESENT,I,Allocated,No,Active high; 1.8k from VBUS and 3.3k to GND; FT digital input; no pulls or ADC/analog use
+36,PB1,SD-CARD,SD_WRITE_PROTECT,I,Allocated,No,SD holder WP pad11; high = locked or absent; low = writable
+37,PB2,BOOT/DEV,BOOT1 strap low,I,Required boot support,No,Not an ordinary spare while the boot strap is required
+38,PE7,FPGA-FSMC,FSMC_AD4,I/O,Allocated,Conditional,P95; complete transport must be released before expansion reuse
+39,PE8,FPGA-FSMC,FSMC_AD5,I/O,Allocated,Conditional,P94; complete transport must be released before expansion reuse
+40,PE9,FPGA-FSMC,FSMC_AD6,I/O,Allocated,Conditional,P93; complete transport must be released before expansion reuse
+41,PE10,FPGA-FSMC,FSMC_AD7,I/O,Allocated,Conditional,P92; complete transport must be released before expansion reuse
+42,PE11,FPGA-FSMC,FSMC_AD8,I/O,Allocated,Conditional,P88; complete transport must be released before expansion reuse
+43,PE12,FPGA-FSMC,FSMC_AD9,I/O,Allocated,Conditional,P87; complete transport must be released before expansion reuse
+44,PE13,FPGA-FSMC,FSMC_AD10,I/O,Allocated,Conditional,P85; complete transport must be released before expansion reuse
+45,PE14,FPGA-FSMC,FSMC_AD11,I/O,Allocated,Conditional,P84; complete transport must be released before expansion reuse
+46,PE15,FPGA-FSMC,FSMC_AD12,I/O,Allocated,Conditional,P83; complete transport must be released before expansion reuse
+47,PB10,UNCOMMITTED,Spare GPIO,I/O,Available,Yes,"General GPIO; alternate functions per ST table — I2C2_SCL, SPI2_SCK, TIM2_CH3, USART3_TX"
+48,PB11,ETHERNET,ETH_RMII_TX_EN,O,Allocated,No,AF11; HP-powered PHY domain; release outputs on USB-only power
+49,VCAP_1,POWER,Internal regulator output; local capacitor only,Power,Required support,No,Not expansion I/O
+50,VDD,POWER,+3V3_MCU; all pins connected and locally decoupled,Power,Required support,No,Not expansion I/O
+51,PB12,ETHERNET,ETH_RMII_TXD0,O,Allocated,No,AF11; HP-powered PHY domain; release outputs on USB-only power
+52,PB13,ETHERNET,ETH_RMII_TXD1,O,Allocated,No,AF11; HP-powered PHY domain; release outputs on USB-only power
+53,PB14,UNCOMMITTED,Spare GPIO,I/O,Available,Yes,General expansion GPIO; timer/serial alternate functions available
+54,PB15,UNCOMMITTED,Spare GPIO,I/O,Available,Yes,General expansion GPIO; timer/serial alternate functions available
+55,PD8,FPGA-FSMC,FSMC_AD13,I/O,Allocated,Conditional,P82; complete transport must be released before expansion reuse
+56,PD9,FPGA-FSMC,FSMC_AD14,I/O,Allocated,Conditional,P81; complete transport must be released before expansion reuse
+57,PD10,FPGA-FSMC,FSMC_AD15,I/O,Allocated,Conditional,P80; complete transport must be released before expansion reuse
+58,PD11,UNCOMMITTED,Spare GPIO,I/O,Available,Yes,General GPIO; alternate functions per ST table — USART3_CTS
+59,PD12,UNCOMMITTED,Spare GPIO,I/O,Available,Yes,"General GPIO; alternate functions per ST table — TIM4_CH1, USART3_RTS"
+60,PD13,UNCOMMITTED,Spare GPIO,I/O,Available,Yes,General GPIO; alternate functions per ST table — TIM4_CH2
+61,PD14,FPGA-FSMC,FSMC_AD0,I/O,Allocated,Conditional,P100; complete transport must be released before expansion reuse
+62,PD15,FPGA-FSMC,FSMC_AD1,I/O,Allocated,Conditional,P99; complete transport must be released before expansion reuse
+63,PC6,BOOT/DEV,DEV_MODE,I,Allocated,No,10k pulldown; jumper to MCU rail selects DEV
+64,PC7,SD-CARD,SD_CARD_PRESENT_N,I,Allocated,No,Holder pad10; low = card present
+65,PC8,SD-CARD,SDIO_DAT0,I/O,Allocated,No,
+66,PC9,SD-CARD,SDIO_DAT1,I/O,Allocated,No,
+67,PA8,UNCOMMITTED,Spare GPIO,I/O,Available,Yes,"General GPIO; alternate functions per ST table — I2C3_SCL, TIM1_CH1, USART1_CK"
+68,PA9,SERIAL,USART1_TX,O,Allocated,No,RS-232 driver to 4P4C; do not use for VBUS sensing
+69,PA10,SERIAL,USART1_RX,I,Allocated,No,RS-232 receiver through 3.3V interface
+70,PA11,USB,USB_FS_DM,I/O,Allocated,No,
+71,PA12,USB,USB_FS_DP,I/O,Allocated,No,
+72,PA13,SWD,SWDIO,I/O,Required debug,No,
+73,VCAP_2,POWER,Internal regulator output; local capacitor only,Power,Required support,No,Not expansion I/O
+74,VSS,POWER,Ground,Power,Required support,No,Connect every VSS pin
+75,VDD,POWER,+3V3_MCU; all pins connected and locally decoupled,Power,Required support,No,Not expansion I/O
+76,PA14,SWD,SWCLK,I,Required debug,No,
+77,PA15,UNCOMMITTED,Spare GPIO,I/O,Available,Yes,SWD-only debug; configure as GPIO during startup; MCU JTAG and SWO/trace disabled
+78,PC10,SD-CARD,SDIO_DAT2,I/O,Allocated,No,
+79,PC11,SD-CARD,SDIO_DAT3,I/O,Allocated,No,
+80,PC12,SD-CARD,SDIO_CK,O,Allocated,No,
+81,PD0,FPGA-FSMC,FSMC_AD2,I/O,Allocated,Conditional,P98; complete transport must be released before expansion reuse
+82,PD1,FPGA-FSMC,FSMC_AD3,I/O,Allocated,Conditional,P97; complete transport must be released before expansion reuse
+83,PD2,SD-CARD,SDIO_CMD,I/O,Allocated,No,
+84,PD3,UNCOMMITTED,Spare GPIO,I/O,Available,Yes,General GPIO; alternate functions per ST table — USART2_CTS
+85,PD4,FPGA-FSMC,FSMC_NOE,O,Allocated,Conditional,P79; complete transport must be released before expansion reuse
+86,PD5,FPGA-FSMC,FSMC_NWE,O,Allocated,Conditional,P78; complete transport must be released before expansion reuse
+87,PD6,UNCOMMITTED,Spare GPIO,I/O,Available,Yes,General GPIO; alternate functions per ST table — USART2_RX
+88,PD7,UNCOMMITTED,Spare GPIO,I/O,Available,Yes,General GPIO; alternate functions per ST table — USART2_CK
+89,PB3,UNCOMMITTED,Spare GPIO,I/O,Available,Yes,SWD-only debug; configure as GPIO during startup; MCU JTAG and SWO/trace disabled
+90,PB4,UNCOMMITTED,Spare GPIO,I/O,Available,Yes,SWD-only debug; configure as GPIO during startup; MCU JTAG and SWO/trace disabled
+91,PB5,UNCOMMITTED,Spare GPIO,I/O,Available,Yes,"General GPIO; alternate functions per ST table — I2C1_SMBA, SPI1_MOSI, SPI3_MOSI, TIM3_CH2"
+92,PB6,UNCOMMITTED,Spare GPIO,I/O,Available,Yes,"General GPIO; alternate functions per ST table — I2C1_SCL, TIM4_CH1, USART1_TX"
+93,PB7,FPGA-FSMC,FSMC_NADV,O,Allocated,Conditional,P75; complete transport must be released before expansion reuse
+94,BOOT0,BOOT/DEV,Boot selection jumper/pull-down; ROM recovery,I,Required support,No,Not expansion I/O
+95,PB8,FPGA-CONTROL,FPGA_AUX1,I/O,Allocated,Conditional,Fitted connection to FPGA P67; function/direction application-defined; both ends inputs/no pulls until assigned
+96,PB9,FPGA-CONTROL,FPGA_AUX2,I/O,Allocated,Conditional,Fitted connection to FPGA P74; function/direction application-defined; both ends inputs/no pulls until assigned
+97,PE0,UNCOMMITTED,Spare GPIO,I/O,Conditional,Conditional,Optional FSMC NBL0; do not enable it when using as spare GPIO — TIM4_ETR
+98,PE1,UNCOMMITTED,Spare GPIO,I/O,Conditional,Conditional,Optional FSMC NBL1; do not enable it when using as spare GPIO
+99,VSS,POWER,Ground,Power,Required support,No,Connect every VSS pin; LQFP100 pad99 is VSS
+100,VDD,POWER,+3V3_MCU; all pins connected and locally decoupled,Power,Required support,No,Not expansion I/O

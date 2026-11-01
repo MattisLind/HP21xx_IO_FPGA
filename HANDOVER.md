@@ -1,8 +1,72 @@
 # HP 2100 / HP13210 emulator: Codex handover
 
-Updated **2026-10-29**, Europe/Stockholm. Read this first when continuing on the
+Updated **2026-11-01**, Europe/Oslo. Read this first when continuing on the
 laptop beside the HP 2100. This is a summary of the conversation and actual
 bring-up state; some older README status paragraphs describe earlier stages.
+
+## Integrated PCB design review — 2026-11-01
+
+Current design: [requirements/INTEGRATED_BOARD_DESIGN.md](requirements/INTEGRATED_BOARD_DESIGN.md),
+revision **0.6**. Review precedes schematic capture. Section 5 consolidates
+remaining work. The power companion and component CSV contain selected
+parts/data sheets; do not track distributor stock counts.
+
+Selected main parts are XC6SLX9-2TQG144C/C27408, STM32F407VGT6/C12345,
+GD25Q16ESIG/C2693492, SD-106M/C266603, USB-C/C165948, GOODWORK USB ESD/
+C21713975, SN75185DWR/C2671047, LAN8720A/C45223 and HR911105A/C12074.
+**One YXC 50 MHz source/C5203552** feeds **CDCLVC1104PWR/C485518**; outputs
+Y0/Y1/Y2 feed FPGA P56, PHY CLKIN and MCU PA1. Source/fan-out are HP-powered
+and independent of MCU/FPGA firmware. The MCU retains its independent 8 MHz
+crystal for USB-only operation.
+
+All three **TLV62569DBVR/C141836** bucks use **SRP5030T-2R2M/C1329375**
+2.2 µH inductors (35 mΩ, 5.5 A Irms, 9 A Isat), 4.7 µF X7R inputs,
+100 nF HF bypass, 22 µF X5R outputs and EN-to-VIN 0 Ω links. Feedback:
+330 kΩ / 73.2 kΩ for both 3.3 V rails; 100 kΩ / 100 kΩ for 1.2 V.
+Two **MDD SS14/C2480** diodes OR HP/USB to the separate MCU regulator.
+The shared HP 3.3 V allocation is **1.2134 A**, including a 50 mA clock and
+200 mA PHY/magnetics/LED allowance. Partial HP 4.85 V input is about
+**2.13 A**, before HP output collectors/pendant. The RS-232 ±12 V allowance
+is **50 mA per rail** for three loaded transmitters. Validate final layout,
+effective capacitance, startup and thermal/current limits.
+
+MCU pins: PC0 TCK, PE2 TMS, PC2 TDI, PC3 TDO, PE3 DONE; PC7 SD present,
+PB1 SD WP; PA9/PA10 USART1; PE4 active-low LED; PE5 PHY reset; PC6 DEV.
+**AUX1 P67↔PB8 and AUX2 P74↔PB9 are fitted**, with no IRQ/DRQ assignment;
+keep both ends inputs until the application assigns function/direction.
+With the 19 FSMC pins active and AUX nets fitted, the MCU has **20 available
+plus five conditional uncommitted pins**, including PA4/PA5, usable as GPIO
+or their native 12-bit DAC outputs. X/Y is only an experiment example; no
+PWM discussion or dedicated analog hardware requirement. Both pin CSVs and
+Markdown tables have Usage categories. FPGA uncommitted pins are
+P59/P61/P62/P66; FSMC/AUX access requires both connected devices released.
+
+Wire-wrap area matches **1.6 mm circular pads, 0.8 mm plated drills,
+2.54 mm nominal grid**, read from 5,379 isolated prototype pads. The provided
+KiCad board is the outline/card-edge reference: 1.6 mm PCB, shaped envelope
+195.980 × 220.8135 mm, with small endpoint gaps to close in the new layout.
+Card pitch is 17.5 mm; above-PCB height approximately 16 mm.
+
+The FPGA Platform Cable header is **2×7, 2.54 mm**, matching the user's cable.
+MCU debug is SWD only, via **2×10, 2.54 mm right-angle ST-LINK header**
+(Samtec TST-110-04-L-D-RA). PA15/PB3/PB4 are GPIO; no SWO/parallel trace.
+Pendant jack: **Würth 615004143821**, right-angle 4P4C. SN75185 driver1/RX1
+serve it; spare two TX/four RX channels reach wire-wrap and the external/top
+HP I/O connector. Use **SN74LVC2G125DCUR/C21404** for pendant isolation and
+**SN74LVC125APWR/C7813** for the four spare RX logic-level translations.
+Final cable/connector contacts and +5 V protection budget remain to allocate.
+
+**MCU_NRST has 10 kΩ to +3V3_MCU, 100 nF, reset button, SWD reset and BAT54
+anode.** The cathode connects through **TI SN74LVC1G32DBVR** on +3V3_MCU,
+implementing `PON_RESET_N OR HP_ABSENT`. The RC alone cannot defeat an
+unpowered-PON clamp. PA0 NPN supplies hardware HP_ABSENT; PB0 VBUS is active
+high via 1.8 kΩ/3.3 kΩ, digital FT input without pulls/ADC use. FPGA PROGRAM_B
+stays on conditioned PON. HSWAPEN/P144 and SUSPEND/P73 are grounded.
+
+One SD-root **`/HP21xx_IO_FPGA.cfg`** serves loader and application:
+`[profile] name=hp13210` selects `[hp13210]`. Firmware work remains to
+implement; installed prototype behavior is recorded separately below.
+The four schematic sheets remain FPGA; STM32/peripherals; HP; expansion.
 
 ## BOTH failed: preserved SWD/JTAG capture — 2026-10-30, latest
 
