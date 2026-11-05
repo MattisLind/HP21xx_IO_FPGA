@@ -3,8 +3,8 @@
 Initial requirements baseline: 2026-10-16.
 
 For the **integrated PCB**, read the [design review](INTEGRATED_BOARD_DESIGN.md),
-revision **0.6, 2026-11-01**. It defines the current component selections and
-pin allocation, four-sheet organization, split supplies/reset, Ethernet,
+revision **0.7, 2026-11-05**. It defines the current component selections and
+pin allocation, four A3 schematic sheets, split supplies/reset, Ethernet,
 USB-C/SD, RS-232 pendant, SWD-only MCU debug, FPGA JTAG and expansion area.
 All 100 STM32 and 144 FPGA package pins have a high-level **Usage** category.
 With active FSMC and fitted AUX1/AUX2, the MCU has **20 available plus five
@@ -12,7 +12,11 @@ conditional expansion GPIOs**, including PA4/PA5 for analog or digital use.
 The board uses one shared 50 MHz oscillator/fan-out, selected buck support
 parts, 2.54 mm programming headers and a right-angle 4P4C pendant jack.
 Wire-wrap pads/drills match the prototype: **1.6 mm / 0.8 mm**. HSWAPEN and
-SUSPEND are grounded.
+SUSPEND are grounded. Card pitch is **5/8 inch (15.875 mm)**; the 1.6 mm PCB
+and adjacent-card solder-side leads leave **12.8 mm maximum component height**.
+Low-profile through-hole 4P4C and integrated-magnetics RJ45 jacks may be
+hand-soldered after JLCPCB assembly. The pendant shall support dynamic
+selection of an application and its matching FPGA gateware from SD.
 
 The loader and application share **`/HP21xx_IO_FPGA.cfg`**. Application settings
 are in the section selected by `name`, e.g. `[hp13210]`. Remaining decisions

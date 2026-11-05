@@ -3,7 +3,7 @@
 ## Q-08: Integrated PCB design review
 
 The current design is [INTEGRATED_BOARD_DESIGN.md](INTEGRATED_BOARD_DESIGN.md),
-revision **0.6, 2026-11-01**. Review precedes the integrated-board schematic.
+revision **0.7, 2026-11-05**. Review precedes the integrated-board schematic.
 The document defines component selections, complete Usage-labelled pin maps,
 SWD-only MCU debug, the single `HP21xx_IO_FPGA.cfg` structure, HSWAPEN low,
 SUSPEND grounded and the PB0 VBUS divider. The supplied `IOB Proto Board`

@@ -1,6 +1,6 @@
 # Integrated HP 21xx I/O platform: design review
 
-Revision **0.6 — 2026-11-01 — design review**.
+Revision **0.7 — 2026-11-05 — design review**.
 
 This document defines the current design of the integrated HP 21xx I/O board.
 The first application is HP 13210/7900 disk emulation; the platform supports
@@ -31,13 +31,17 @@ allows application-specific external circuitry without redesigning the board.
 Support for any particular interface still depends on the available pins,
 electrical/timing limits and the corresponding gateware/software.
 
+The user shall be able to **dynamically select an application and its matching
+FPGA gateware from the pendant**, using images stored on SD, and run the
+selected peripheral function on the board.
+
 The present wire-wrapped carrier-board prototype proves the initial approach
 but is not a reproducible integrated platform. The new board should consolidate
 the electronics, provide dependable startup/recovery and external development
 access, and select compatible images from SD without rewriting unchanged code.
 HP 13210/7900 disk emulation is the first application, not the hardware's scope.
 
-**Current decisions**
+### 1.1 Current decisions
 
 | Item | Current design direction |
 | --- | --- |
@@ -52,13 +56,13 @@ HP 13210/7900 disk emulation is the first application, not the hardware's scope.
 | PON | Resistor/diode conditioning to FPGA PROGRAM_B, with power-aware gating and one BAT54 isolating the MCU reset button. |
 | FPGA management | STM32 PC0/PE2/PC2/PC3 connect to FPGA TCK/TMS/TDI/TDO; PE3 reads DONE. A local 14-pin FPGA JTAG connector supports an external dongle. |
 | DEV mode | A jumper indicates external FPGA development: the STM32 loader must perform **no FPGA JTAG activity at all**. Applications must honor the same ownership state. |
-| Boot platform | Resident STM32 SD loader selects firmware, avoids rewriting matching images, and supports checking/updating the FPGA image against the selected profile. |
+| Boot platform | Pendant supports dynamic application/gateware selection from SD. Resident STM32 SD loader validates the selected pair, avoids rewriting matching images, and supports checking/updating the FPGA image against the selected profile. |
 | Recovery/debug | BOOT0 selection, STM32 reset button and **SWD-only MCU debug** on PA13/PA14. Disable MCU JTAG and SWO/parallel trace; PA15/PB3/PB4 are expansion GPIO. Factory ROM DFU installs/recovers the resident SD loader. |
 | Expansion | Top connector/wire-wrap exposes spare FPGA and STM32 GPIO, PA4/PA5 general expansion pins, and FSMC nets for reuse after full MCU release. FPGA P66/P62 remain included. |
-| Ethernet | STM32 **RMII** → LAN8720A → HR911105A RJ45 with integrated magnetics; 10/100 Mb/s, no Gigabit requirement. |
-| Mechanical height | User reports 17.5 mm card pitch; use **16 mm maximum component height above PCB** as the review envelope. |
+| Ethernet | STM32 **RMII** → LAN8720A → **Pulse JXD1-1V17NL** low-profile through-hole RJ45 with integrated magnetics; 10/100 Mb/s, no Gigabit requirement. |
+| Mechanical height | **5/8 inch (15.875 mm ≈ 15.9 mm) card pitch**, **1.6 mm PCB**; allow **at most 12.8 mm above the component-side PCB surface**, accounting for the adjacent card's solder-side leads. |
 | Power | HP 4.85 V / 50 A and −2 V / 15 A machine supplies reported available. Separate MCU regulator fed through Schottkys from HP and USB; ±12 V available for RS-232; +28 V unused. |
-| Schematic organization | Four sheets: FPGA; STM32 and its peripherals; HP connector/receivers/drivers; top connector/expansion/wire-wrap. |
+| Schematic organization | Four **A3** sheets: FPGA; STM32 and its peripherals; HP connector/receivers/drivers; top connector/expansion/wire-wrap. |
 
 ## 2. High-level architecture
 
@@ -72,7 +76,7 @@ flowchart LR
     SD[Full-size SD socket] <--> MCU
     USB[USB-C\nUSB FS device and ROM DFU] <--> MCU
     MCU <-- RMII --> PHY[10/100 PHY\nLAN8720A]
-    PHY <--> NET[HR911105A RJ45\nintegrated magnetics to LAN]
+    PHY <--> NET[JXD1-1V17NL RJ45\nintegrated magnetics to LAN]
     CLK[Shared 50 MHz oscillator\nand CDCLVC1104 fan-out] --> FPGA
     CLK --> PHY
     CLK -- RMII reference --> MCU
@@ -99,7 +103,7 @@ octal**. Those are the disk application's present configuration, not a
 restriction on future platform applications. HP-model-dependent signals such
 as RUN, BIOS/BIOI/BIOO and SFSB require explicit profile support.
 
-**Four-sheet KiCad organization**
+**Four-sheet A3 KiCad organization**
 
 | Sheet | Contents and circuit ownership |
 | --- | --- |
@@ -112,7 +116,8 @@ Keep SD, USB, RS-232 and their support on the STM32 sheet, as requested;
 do not split them into separate functional sheets. Power/reset circuitry is
 owned by its relevant sheet rather than creating another power page. A simple
 way to keep **four drawing sheets total** is to make the FPGA drawing the root
-and the other three child sheets; final sheet size/layout is a capture choice.
+and the other three child sheets. **All four schematic sheets shall use A3
+size**; arrange the circuits within those sheets during schematic capture.
 Use explicit hierarchical interfaces for shared buses and reset signals, and
 consistent supply names. A signal exposed on the expansion drawing is the
 same net as at the FPGA, not a second pin allocation. Physical wire-wrap area
@@ -824,12 +829,20 @@ ESD and optional switched card power remain to be finalized. Start SDIO at
 
 #### 3.3.5 Debug and pendant serial port — RS-232
 
-Use **Würth Elektronik 615004143821**, WR-MJ **4P4C**, right-angle through-hole,
-with a horizontal cable exit. The manufacturer drawing has body dimensions
-10 × 13 × 14.5 mm, fitting the **16 mm above-PCB envelope**. Use its locating
-holes/footprint and reserve cable/latch access at the board edge. Its contact
-rating is 1.5 A; pendant supply protection/current limit is set separately.
-[Jack drawing][pendant-jack].
+Use **TE Connectivity 1-1705949-1**, **4P4C** (sold as RJ22; also commonly
+called RJ9/RJ10), right-angle through-hole, with a horizontal cable exit.
+TE specifies **11.5 mm height** and a **1.6 mm PCB**, giving **1.3 mm nominal
+headroom** below the 12.8 mm limit. Use the manufacturer's locating holes and
+footprint, check height tolerances at capture, and reserve cable/latch access
+at the board edge. Its contact rating is 1.5 A; pendant supply protection and
+current limit are set separately. [Selected jack and drawing][pendant-jack].
+
+**Alternative:** **TE Connectivity 215875-1**, also right-angle through-hole
+4P4C, **11.5 mm** high, for a 1.6 mm PCB; this version has no panel stops.
+Review its own footprint and packaging rather than assuming interchangeability.
+[Alternative jack and drawing][pendant-jack-alt]. The previous
+**Würth 615004143821**, **14.5 mm** high, exceeds the corrected limit.
+[Würth drawing][pendant-jack-old].
 
 The four cable conductors are **+5 V, GND, RS-232 TX and RS-232 RX**.
 Use **USART1 PA9/TX and PA10/RX**, through **TI SN75185DWR/C2671047**,
@@ -933,15 +946,33 @@ control wires plus MDC and MDIO. [STM32 Ethernet capability][stm32-product].
 | Function | Part | LCSC | Implementation notes |
 | --- | --- | --- | --- |
 | RMII PHY | **Microchip LAN8720A-CP-TR**, 24-QFN 4 × 4 mm | **C45223** | 10/100 PHY with Auto-MDIX and 3.3 V operation; Standard assembly footprint. |
-| RJ45 plus magnetics | **Hanrun HR911105A**, through-hole, green/yellow LEDs | **C12074** | Integrated 1:1 TX/RX isolation transformers and common-mode components; no separate transformer required. |
+| RJ45 plus magnetics | **Pulse JXD1-1V17NL**, low-profile right-angle through-hole, green/orange and yellow LEDs | —; separately sourced / hand-fitted | Integrated 1:1 TX/RX isolation transformers and common-mode chokes; no EMI fingers; no separate transformer required. |
 | RMII reference clock | Shared source and CDCLVC1104 fan-out, 3.2.2 | **C5203552 / C485518** | Separate buffered PHY/MAC clock branches |
 
-The Hanrun drawing specifies **13.3 mm** body height; the JLC catalog lists
-**13.5 mm**. Use 13.5 mm for the initial envelope: about **2.5 mm below the
-user's 16 mm limit**. Its drawing supplies the actual footprint/panel cutout.
-The connector fits this height envelope without a mid-mount PCB cutout.
-[Hanrun drawing][ethernet-jack-ds], [PHY catalog][ethernet-phy-jlc],
-[jack catalog][ethernet-jack-jlc].
+The **JXD1-1V17NL** fits the **12.8 mm component-side height limit** without
+a PCB cutout. Pulse's J507 mechanical drawing gives **11.30 ±0.38 mm** for
+the version without EMI fingers: **11.68 mm maximum**, leaving **1.12 mm**
+headroom when seated as drawn. Body depth is **24.11 ±0.38 mm** and width
+**17.78 ±0.38 mm**. Check the footprint, panel opening and mated plug/latch
+clearance at layout. The jack remains shielded despite having no spring EMI
+fingers. [Pulse data sheet][ethernet-jack-ds],
+[checked J507.A drawing, pages 1–3][ethernet-jack-checked-ds],
+[PHY catalog][ethernet-phy-jlc].
+
+**RJ45 alternatives and exclusions**
+
+| Part | Magnetics / mounting | Height and fit assessment |
+| --- | --- | --- |
+| **Taoglas TMJ19911ADNL** | Integrated 10/100 magnetics and LEDs; recessed/mid-mount | Drawing shows **8.90 mm** from PCB seating plane to housing top, plus **2.00 mm** upper EMI fingers: approximately **10.90 mm above PCB**, nominal. The **11.35 mm** body extends approximately **2.45 mm below the seating plane**, or **0.85 mm below a 1.6 mm PCB**. Requires the specified PCB cutout and separate underside/edge-clearance review; not a footprint substitute. |
+| **Pulse JXD1-1V07NL** | Integrated 10/100 magnetics; through-hole, with EMI fingers | **13.30 ±0.38 mm including upper EMI fingers**; exceeds 12.8 mm despite the 11.3 mm housing. Excluded. |
+| **Hanrun HR911105A / C12074** | Integrated 10/100 magnetics; through-hole | Previous selection; **13.3 mm drawing / 13.5 mm catalog** height exceeds 12.8 mm. Excluded. |
+
+The Taoglas assessment uses the mechanical drawing on page 5; its product
+page and PDF disagree about SMT versus THT, so the drawing must govern the
+mounting details. Integrated-magnetics options are available, so a plain RJ45
+with separate transformers is not needed for the present selection.
+[Taoglas drawing][ethernet-jack-alt], [Taoglas product page][ethernet-jack-alt-product],
+[previous Hanrun drawing][ethernet-jack-old-ds], [previous jack catalog][ethernet-jack-old-jlc].
 
 **RMII pin allocation**
 
@@ -986,7 +1017,9 @@ on strap pins. Fit MDIO bias and choose an MDC rate within the PHY limit.
 Poll link status over MDIO initially; a PHY-interrupt connection is optional.
 
 Use the jack's separate TX/RX center taps, terminations and shield/Bob-Smith
-connections according to the Hanrun/Microchip diagrams. Check the integrated
+connections according to the **Pulse/Microchip** diagrams. The Pulse jack has
+a different pinout from HR911105A; derive the symbol/footprint from its own
+drawing and verify the LAN8720A center-tap bias requirements. Check the integrated
 termination components before adding any duplicates. Route short, controlled-
 impedance MDI differential pairs and provide cable-side ESD with a reviewed
 chassis/ground/isolation layout. During USB-only operation the PHY is off;
@@ -1140,11 +1173,21 @@ than replacing it with a rectangle. Check final mechanical fit and close the
 small existing outline endpoint gaps (largest measured **0.0074 mm**) in the
 new layout. The source project remains a reference input.
 
-Card pitch is **17.5 mm**; maximum above-PCB component height is approximately
-**16 mm**. Check adjacent-card underside components, cable mating and front
-access. Select wire-wrap area size, mounting/keep-outs and edge plating from
-this mechanical baseline. Transfer exact component identities into KiCad
-fields; add designators/footprints and placement data after capture.
+Card pitch is **5/8 inch = 15.875 mm (approximately 15.9 mm)**. With a
+**1.6 mm PCB** and allowance for leads/solder joints protruding from the
+**adjacent card's solder side into this card's component space**, the maximum
+component-side connector/component height is **12.8 mm above this PCB's top
+surface**. This is the resulting height allowance, already accounting for
+those adjacent-card protrusions. Include housing, stand-offs and shield/EMI
+tabs in each component's maximum installed height, including tolerances.
+Check cable mating, latch access and front clearance separately.
+
+**Through-hole connectors are acceptable** and may be hand-soldered after
+JLCPCB assembles the PCB. Connector selection is not restricted to SMT or
+the JLCPCB/LCSC assembly catalog. Select wire-wrap area size, mounting/keep-outs
+and edge plating from this mechanical baseline. Transfer exact component
+identities into KiCad fields; add designators/footprints and placement data
+after capture.
 
 **MCU indication and SWD support**
 
@@ -1173,6 +1216,9 @@ Remaining hardware work is listed in **section 5**.
 ## 4. Software
 
 The resident loader selects and validates a compatible application/FPGA pair.
+The pendant shall support dynamic selection of the application and its matching
+gateware from SD. Selection and switchover must follow the same compatibility
+checks and ownership rules as startup.
 Hardware DEV, reset and power/transport ownership apply to both loader and
 application. This section specifies the platform firmware to implement.
 
@@ -1405,12 +1451,12 @@ grounded and single configuration file above are the current design.
 
 | ID | Section | Open issue |
 | --- | --- | --- |
-| H01 | 3.4 | Derive the final shaped outline/card-edge layout from the supplied KiCad board; close endpoint gaps, check fingers/plating, slot fit, mounting and cable clearance within the 16 mm height envelope. |
+| H01 | 3.4 | Derive the final shaped outline/card-edge layout from the supplied KiCad board; close endpoint gaps, check fingers/plating, slot fit, mounting and cable/latch clearance. Verify maximum installed heights, including tolerances and shield tabs, within the 12.8 mm component-side envelope. Review any recessed jack's cutout and underside clearance separately. |
 | H02 | 3.2.6 / 3.3.9 | Size the wire-wrap area and choose posts/external connector contacts, using the fixed 1.6 mm pad / 0.8 mm drill geometry. Allocate fitted AUX1/AUX2 and spare RS-232 nodes in the connector pinout; their application functions remain undefined. |
 | H03 | 3.2.1 / 3.3.1 | Validate the selected buck LC parts, effective capacitance, layout, FPGA power estimate, startup/thermal behavior and per-slot power path. Establish HP output/pendant currents and USB current/inrush/suspend policy. |
 | H04 | 3.2.7 / 3.3.7 | Validate reset gate/RC/button/diode operation and any additional rail supervision; verify PON/NRST/PROGRAM_B low levels, diode drops, flash readiness and USB-only startup without backpower or reset clamping. |
 | H05 | 3.2.2 / 3.3.2 | Qualify the shared 50 MHz oscillator/fan-out and select the 8 MHz crystal/load capacitors; verify HSE/USB clock startup. Decide whether RTC crystal/battery support is needed. |
-| H06 | 3.3.8 | Verify RMII timing/jitter with the shared oscillator/fan-out; finalize PHY reset, straps, MDIO bias, MDI/ESD/shield network and 10/100 current measurements. |
+| H06 | 3.3.8 | Verify RMII timing/jitter with the shared oscillator/fan-out; finalize PHY reset, straps, MDIO bias, Pulse jack pinout/center-tap bias, MDI/ESD/shield network, LED wiring/current and 10/100 current measurements. |
 | H07 | 3.2.3 | Choose INIT_B/DONE/flash bias values and header footprint; verify startup pull-ups, bitstream pin settings and inactive HP states through reset, configuration and JTAG bridge operation. |
 | H08 | 3.2.5 | Validate receiver/driver thresholds, rise/fall times, transistor/ACT loading, resistor package dissipation and HP timing under real loads. |
 | H09 | 3.3.3 / 3.3.4 | Finalize USB/SD footprints, ESD/ground routing and any SD power switching; verify PB0 divider tolerances/leakage and SD switch behavior. |
@@ -1423,7 +1469,7 @@ grounded and single configuration file above are the current design.
 | --- | --- | --- |
 | S01 | 4.1 | Implement the shared section-aware `HP21xx_IO_FPGA.cfg` parser and selected-section handoff; define bounds/defaults/error handling for the schema. |
 | S02 | 4.2 / 4.2.1 | Implement loader/application linking, descriptor placement and persistent metadata/valid markers; prove loader capacity, hash checks, unchanged-image boot and interrupted-update recovery. |
-| S03 | 4.2 / 4.4 | Finalize recovery indication/timeouts, FPGA-only management/handoff behavior, and whether DEV also inhibits automatic MCU application replacement. Decide whether rollback/golden images are required. |
+| S03 | 4.2 / 4.4 | Define the pendant selection protocol and controlled application/gateware switchover. Finalize recovery indication/timeouts, FPGA-only management/handoff behavior, and whether DEV also inhibits automatic MCU application replacement. Decide whether rollback/golden images are required. |
 | S04 | 4.2.2 | Implement GigaDevice flash support, a verified JTAG-to-SPI bridge, ID/hash checks, flash verification and reliable reboot. Define persistent-image verification after external JTAG programming. |
 | S05 | 3.2.4 / 3.3.6 / 4.3 | Define AUX1/AUX2 function/direction per application and enforce SWD-only startup, DEV prohibition and JTAG/FSMC/AUX ownership across handoff, errors and resets. Validate complete transport release for FPGA-only profiles. |
 | S06 | 4.3 | Define HP readiness/priority behavior during MCU reset, DEV, updates and backend failure; complete physical HP peripheral tests. |
@@ -1550,14 +1596,20 @@ FPGA/receiver/driver channels; RUN drive remains inactive in the current image.
 [stm32-product]: https://www.st.com/en/microcontrollers-microprocessors/stm32f407vg.html
 [ethernet-phy-ds]: https://ww1.microchip.com/downloads/aemDocuments/documents/UNG/ProductDocuments/DataSheets/LAN8720A-LAN8720Ai-Data-Sheet-DS00002165.pdf
 [ethernet-phy-jlc]: https://jlcpcb.com/partdetail/MicrochipTech-LAN8720A_CPTR/C45223
-[ethernet-jack-jlc]: https://jlcpcb.com/partdetail/C12074
-[ethernet-jack-ds]: https://hrdzen.oss-cn-beijing.aliyuncs.com/202601/b2f7f328cae13.pdf
+[ethernet-jack-ds]: https://productfinder.pulseelectronics.com/api/open/part-attachments/datasheet/JXD1-1V07NL
+[ethernet-jack-checked-ds]: https://datasheet.octopart.com/JXD1-1V17NL-Pulse-datasheet-169233423.pdf
+[ethernet-jack-alt]: https://www.taoglas.com/datasheets/TMJ19911ADNL.pdf
+[ethernet-jack-alt-product]: https://www.taoglas.com/product/rj45-icm-versatile-10-100-base-t-low-profile-connector-taoglas-tmj19911adnl/
+[ethernet-jack-old-jlc]: https://jlcpcb.com/partdetail/C12074
+[ethernet-jack-old-ds]: https://hrdzen.oss-cn-beijing.aliyuncs.com/202601/b2f7f328cae13.pdf
 [ethernet-clock-ds]: https://datasheet.lcsc.com/datasheet/pdf/b336a5b52993e15e0134a8f3d7decec7.pdf
 
 [usb-vbus]: https://www.st.com/resource/en/application_note/an4879-introduction-to-usb-hardware-and-pcb-guidelines-using-stm32-mcus-stmicroelectronics.pdf
 
 [clock-buffer]: https://www.ti.com/lit/ds/symlink/cdclvc1104.pdf
-[pendant-jack]: https://www.we-online.com/components/products/datasheet/615004143821.pdf
+[pendant-jack]: https://www.te.com/en/product-1-1705949-1.html
+[pendant-jack-alt]: https://www.te.com/en/product-215875-1.html
+[pendant-jack-old]: https://www.we-online.com/components/products/datasheet/615004143821.pdf
 [serial-ds]: https://www.ti.com/lit/ds/symlink/sn75185.pdf
 [serial-exp-buffer]: https://www.ti.com/lit/ds/symlink/sn74lvc125a.pdf
 [reset-gate]: https://www.ti.com/lit/ds/symlink/sn74lvc1g32.pdf
