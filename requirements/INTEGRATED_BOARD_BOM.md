@@ -9,7 +9,9 @@ lines describe the board's devices and support circuits. The
 and sums their quantities into 76 lines. Its `Functional_items` column links
 each total back to the master. There are 60 distinct LCSC identities and
 seven TME ordering codes. Neither file is a released assembly BOM: the
-integrated schematic and PCB placement do not yet exist.
+initial [KiCad schematic](../hardware/integrated/README.md) exists, but its
+circuit capture and BOM reconciliation remain incomplete; PCB placement does
+not yet exist. See the [per-item capture coverage](../hardware/integrated/bom_capture_coverage.csv).
 
 ## Reading the CSVs
 

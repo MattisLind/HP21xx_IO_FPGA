@@ -1,0 +1,24 @@
+{
+  "kicad_version": "10.0.5",
+  "drawing_sheets": 4,
+  "paper": "A3",
+  "symbol_units": 639,
+  "annotated_references": 606,
+  "checked_exported_pins": 1665,
+  "unintended_net_merges": 0,
+  "erc_errors": 2,
+  "erc_warnings": 17,
+  "erc_by_type": {
+    "pin_to_pin": 2,
+    "isolated_pin_label": 15,
+    "pin_not_driven": 2
+  },
+  "release_status": "Initial capture; incomplete; not for PCB manufacture",
+  "limitations": [
+    "Ethernet PHY/magnetics/straps/protection circuit not captured",
+    "Pendant connector pinout/current limiting/protection and hardware /OE network not captured",
+    "Selected connector, crystal, flash, oscillator and inductor footprints require exact drawing review",
+    "Expansion access is logical test-pad placeholders; top connector/post allocation open",
+    "Coverage CSV lists every BOM item not yet or only partially captured"
+  ]
+}

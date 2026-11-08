@@ -1,0 +1,354 @@
+{
+    "$schema": "https://schemas.kicad.org/erc.v1.json",
+    "coordinate_units": "mm",
+    "date": "2026-11-08T11:14:37",
+    "ignored_checks": [
+        {
+            "description": "Global label only appears once in the schematic",
+            "key": "single_global_label"
+        },
+        {
+            "description": "Four connection points are joined together",
+            "key": "four_way_junction"
+        },
+        {
+            "description": "SPICE model issue",
+            "key": "simulation_model_issue"
+        },
+        {
+            "description": "Assigned footprint doesn't match footprint filters",
+            "key": "footprint_filter"
+        }
+    ],
+    "included_severities": [
+        "error",
+        "warning"
+    ],
+    "kicad_version": "10.0.5",
+    "sheets": [
+        {
+            "path": "/",
+            "uuid_path": "/268b0713-71ca-57e8-8875-18f18ac66ecf",
+            "violations": [
+                {
+                    "description": "Pins of type Bidirectional and Power output are connected",
+                    "items": [
+                        {
+                            "description": "Symbol U1 Pin 144 [IO_L1P_HSWAPEN_0, Bidirectional, Line]",
+                            "pos": {
+                                "x": 0.1905,
+                                "y": 0.4318
+                            },
+                            "uuid": "de23f251-26ec-5104-9ad6-d697b983dfba"
+                        },
+                        {
+                            "description": "Symbol #FLG2005 Pin 1 [Power output, Line]",
+                            "pos": {
+                                "x": 3.7592,
+                                "y": 1.905
+                            },
+                            "uuid": "b6498b36-c778-5550-8ef2-c696e890a345"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "pin_to_pin"
+                },
+                {
+                    "description": "Pins of type Bidirectional and Power output are connected",
+                    "items": [
+                        {
+                            "description": "Symbol U1 Pin 73 [SUSPEND, Bidirectional, Line]",
+                            "pos": {
+                                "x": 0.8763,
+                                "y": 1.4478
+                            },
+                            "uuid": "58267858-d0de-59ca-911e-1027936826a3"
+                        },
+                        {
+                            "description": "Symbol #FLG2005 Pin 1 [Power output, Line]",
+                            "pos": {
+                                "x": 3.7592,
+                                "y": 1.905
+                            },
+                            "uuid": "b6498b36-c778-5550-8ef2-c696e890a345"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "pin_to_pin"
+                },
+                {
+                    "description": "Label connected to only one pin",
+                    "items": [
+                        {
+                            "description": "Label 'CLK50_PHY'",
+                            "pos": {
+                                "x": 2.3368,
+                                "y": 1.1557
+                            },
+                            "uuid": "80177894-d398-5fcd-915c-3137cf33ddc2"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "isolated_pin_label"
+                },
+                {
+                    "description": "Label connected to only one pin",
+                    "items": [
+                        {
+                            "description": "Label 'CLK50_PHY'",
+                            "pos": {
+                                "x": 3.0353,
+                                "y": 0.9525
+                            },
+                            "uuid": "75fb975f-c322-5da5-ac7e-f62e975761cd"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "isolated_pin_label"
+                },
+                {
+                    "description": "Label connected to only one pin",
+                    "items": [
+                        {
+                            "description": "Label 'ETH_PHY_RESET_N'",
+                            "pos": {
+                                "x": 0.2413,
+                                "y": 0.6858
+                            },
+                            "uuid": "72792500-6d6f-5282-875b-f1b7be4ea6f9"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "isolated_pin_label"
+                },
+                {
+                    "description": "Label connected to only one pin",
+                    "items": [
+                        {
+                            "description": "Label 'ETH_MDIO'",
+                            "pos": {
+                                "x": 0.8001,
+                                "y": 0.381
+                            },
+                            "uuid": "d8cbba28-7d61-5888-9ec2-3d3f059a3bf0"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "isolated_pin_label"
+                },
+                {
+                    "description": "Label connected to only one pin",
+                    "items": [
+                        {
+                            "description": "Label 'ETH_RMII_CRS_DV'",
+                            "pos": {
+                                "x": 0.8001,
+                                "y": 0.508
+                            },
+                            "uuid": "a63a970e-074f-501c-aab5-b12f3d364cc2"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "isolated_pin_label"
+                },
+                {
+                    "description": "Label connected to only one pin",
+                    "items": [
+                        {
+                            "description": "Label 'ETH_RMII_TX_EN'",
+                            "pos": {
+                                "x": 0.8001,
+                                "y": 1.0414
+                            },
+                            "uuid": "09bd8d5b-01fa-598d-9092-12445a6ea23c"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "isolated_pin_label"
+                },
+                {
+                    "description": "Label connected to only one pin",
+                    "items": [
+                        {
+                            "description": "Label 'ETH_RMII_TXD0'",
+                            "pos": {
+                                "x": 0.8001,
+                                "y": 1.0668
+                            },
+                            "uuid": "838dd6b3-724b-5864-9450-994072fefafc"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "isolated_pin_label"
+                },
+                {
+                    "description": "Label connected to only one pin",
+                    "items": [
+                        {
+                            "description": "Label 'ETH_RMII_TXD1'",
+                            "pos": {
+                                "x": 0.8001,
+                                "y": 1.0922
+                            },
+                            "uuid": "5b93b3ba-0d8b-5911-a414-ec0ccf5cc11c"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "isolated_pin_label"
+                },
+                {
+                    "description": "Label connected to only one pin",
+                    "items": [
+                        {
+                            "description": "Label 'ETH_MDC'",
+                            "pos": {
+                                "x": 0.8001,
+                                "y": 1.2192
+                            },
+                            "uuid": "9c589fe5-1ae1-5e86-b627-73dbf04dac53"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "isolated_pin_label"
+                },
+                {
+                    "description": "Label connected to only one pin",
+                    "items": [
+                        {
+                            "description": "Label 'ETH_RMII_RXD0'",
+                            "pos": {
+                                "x": 0.8001,
+                                "y": 1.2954
+                            },
+                            "uuid": "30896c32-f132-5eb4-87a9-a5b2bb5c9eb0"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "isolated_pin_label"
+                },
+                {
+                    "description": "Label connected to only one pin",
+                    "items": [
+                        {
+                            "description": "Label 'ETH_RMII_RXD1'",
+                            "pos": {
+                                "x": 0.8001,
+                                "y": 1.3208
+                            },
+                            "uuid": "6024ef8f-3d85-5f01-a6e7-42a1b66346e5"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "isolated_pin_label"
+                },
+                {
+                    "description": "Label connected to only one pin",
+                    "items": [
+                        {
+                            "description": "Hierarchical Label 'CLK50_PHY'",
+                            "pos": {
+                                "x": 2.0193,
+                                "y": 2.3495
+                            },
+                            "uuid": "047b2aa9-2265-5402-ba43-4717cc5010c2"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "isolated_pin_label"
+                },
+                {
+                    "description": "Label connected to only one pin",
+                    "items": [
+                        {
+                            "description": "Label 'CLK50_PHY'",
+                            "pos": {
+                                "x": 2.0447,
+                                "y": 2.3495
+                            },
+                            "uuid": "292a6e3a-923a-5eeb-a360-652e66d0fb2e"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "isolated_pin_label"
+                },
+                {
+                    "description": "Label connected to only one pin",
+                    "items": [
+                        {
+                            "description": "Label 'PENDANT_RX_RS232'",
+                            "pos": {
+                                "x": 3.1369,
+                                "y": 0.4064
+                            },
+                            "uuid": "2be5157b-a787-585b-b599-154a07247ca6"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "isolated_pin_label"
+                },
+                {
+                    "description": "Label connected to only one pin",
+                    "items": [
+                        {
+                            "description": "Label 'PENDANT_TX_RS232'",
+                            "pos": {
+                                "x": 3.1369,
+                                "y": 0.4826
+                            },
+                            "uuid": "b79c1435-f44d-5264-a2a3-5aa738226653"
+                        }
+                    ],
+                    "severity": "warning",
+                    "type": "isolated_pin_label"
+                }
+            ]
+        },
+        {
+            "path": "/STM32/",
+            "uuid_path": "/268b0713-71ca-57e8-8875-18f18ac66ecf/489c252f-eb9b-5753-837c-30911ba2c86f",
+            "violations": [
+                {
+                    "description": "Input pin not driven by any Output pins",
+                    "items": [
+                        {
+                            "description": "Symbol U1005 Pin 2 [RA1, Input, Line]",
+                            "pos": {
+                                "x": 3.1623,
+                                "y": 0.4064
+                            },
+                            "uuid": "51093e4c-dda7-5c70-812f-09de948c744e"
+                        }
+                    ],
+                    "severity": "error",
+                    "type": "pin_not_driven"
+                },
+                {
+                    "description": "Input pin not driven by any Output pins",
+                    "items": [
+                        {
+                            "description": "Symbol U1006 Pin 1 [Input, Inverted]",
+                            "pos": {
+                                "x": 3.3147,
+                                "y": 1.27
+                            },
+                            "uuid": "31b5b2d4-e997-5b87-a924-c722b738233e"
+                        }
+                    ],
+                    "severity": "error",
+                    "type": "pin_not_driven"
+                }
+            ]
+        },
+        {
+            "path": "/HP_Interface/",
+            "uuid_path": "/268b0713-71ca-57e8-8875-18f18ac66ecf/76e7e616-d3f1-5983-8f03-3e2355efd57c",
+            "violations": []
+        },
+        {
+            "path": "/Expansion/",
+            "uuid_path": "/268b0713-71ca-57e8-8875-18f18ac66ecf/2e82694c-661e-5113-8c9e-86fc24abb938",
+            "violations": []
+        }
+    ],
+    "source": "HP21xx_IO.kicad_sch"
+}

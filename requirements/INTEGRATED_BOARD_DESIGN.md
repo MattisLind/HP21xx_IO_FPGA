@@ -7,6 +7,11 @@ The first application is HP 13210/7900 disk emulation; the platform supports
 other peripheral functions through a compatible STM32 application/FPGA image
 selected on SD. Review the design before schematic capture.
 
+An [initial four-sheet KiCad capture](../hardware/integrated/HP21xx_IO.kicad_pro)
+and [PDF preview](../hardware/integrated/HP21xx_IO.pdf) are now available.
+[Capture notes and remaining circuit work](../hardware/integrated/README.md)
+distinguish the wired first pass from the unreleased portions of this design.
+
 Component choices, pin assignments and configuration structure below are the
 current design. Remaining decisions and verification work are collected in
 **section 5**. Electrical planning allowances still need validation for the

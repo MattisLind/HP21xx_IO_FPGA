@@ -1,0 +1,145 @@
+Item,Function,Planned_quantity,Captured_references,Captured_designators,Status
+B001,Independent buck stages,3,3,U3; U4; U1003,Count captured; circuit/footprint review remains
+B002,Buck power inductors,3,3,L1; L2; L1001,Count captured; circuit/footprint review remains
+B003,Buck input capacitors,3,3,C1; C4; C1019,Count captured; circuit/footprint review remains
+B004,Buck input HF bypass,3,3,C2; C5; C1020,Count captured; circuit/footprint review remains
+B005,Buck output capacitors,3,3,C3; C6; C1021,Count captured; circuit/footprint review remains
+B006,3.3V buck feedback upper,2,2,R15; R1017,Count captured; circuit/footprint review remains
+B007,3.3V buck feedback lower,2,2,R16; R1018,Count captured; circuit/footprint review remains
+B008,1.2V buck feedback pair,2,2,R18; R19,Count captured; circuit/footprint review remains
+B009,Buck enable links,3,3,R14; R17; R1016,Count captured; circuit/footprint review remains
+B010,Buck feed-forward capacitor positions,0,0,,PCB feature / not fitted
+B011,MCU input power OR diodes,2,2,D1001; D1002,Count captured; circuit/footprint review remains
+B012,HP +5V entry local bulk,1,0,,Not captured yet
+B013,HP interface +3V3 bulk distribution,4,0,,Not captured yet
+B014,HP driver +5V bulk distribution,4,0,,Not captured yet
+B015,FPGA,1,1,U1,Count captured; circuit/footprint review remains
+B016,FPGA SPI configuration flash,1,1,U2,Count captured; circuit/footprint review remains
+B017,Shared 50MHz oscillator,1,1,Y1,Count captured; circuit/footprint review remains
+B018,Clock fan-out buffer,1,1,U5,Count captured; circuit/footprint review remains
+B019,FPGA supply-pin bypass,21,21,C7; C8; C9; C10; C11; C12; C13; C14; C15; C16; C17; C18; C19; C20; C21; C22; C23; C24; C25; C26; C27,Count captured; circuit/footprint review remains
+B020,FPGA rail local bulk,3,3,C28; C29; C30,Count captured; circuit/footprint review remains
+B021,Configuration flash bypass,1,1,C31,Count captured; circuit/footprint review remains
+B022,Oscillator and clock-buffer bypass,2,0,,Not captured yet
+B023,Clock-buffer local bulk,1,0,,Not captured yet
+B024,Shared clock supply link,1,0,,Not captured yet
+B025,Clock output source termination,3,3,R26; R27; R28,Count captured; circuit/footprint review remains
+B026,Oscillator OE pull-up,1,1,R25,Count captured; circuit/footprint review remains
+B027,Flash inactive-state pull-ups,3,3,R1; R2; R3,Count captured; circuit/footprint review remains
+B028,INIT_B and DONE pull-ups,2,2,R4; R5,Count captured; circuit/footprint review remains
+B029,Master SPI mode straps,2,2,R6; R7,Count captured; circuit/footprint review remains
+B030,MCU JTAG branch series resistors,3,3,R8; R10; R12,Count captured; circuit/footprint review remains
+B031,JTAG inactive-state bias,3,3,R9; R11; R13,Count captured; circuit/footprint review remains
+B032,FSMC strobe inactive pull-ups,3,0,,Not captured yet
+B033,FSMC and AUX disconnect links,21,21,R29; R30; R31; R32; R33; R34; R35; R36; R37; R38; R39; R40; R41; R42; R43; R44; R45; R46; R47; R48; R49,Count captured; circuit/footprint review remains
+B034,FPGA activity LED,1,1,D1,Count captured; circuit/footprint review remains
+B035,FPGA LED current limiter,1,1,R20,Count captured; circuit/footprint review remains
+B036,HP receiver transistors,43,43,Q2001; Q2002; Q2003; Q2004; Q2005; Q2006; Q2007; Q2008; Q2009; Q2010; Q2011; Q2012; Q2013; Q2014; Q2015; Q2016; Q2017; Q2018; Q2019; Q2020; Q2021; Q2022; Q2023; Q2024; Q2025; Q2026; Q2027; Q2028; Q2029; Q2030; Q2031; Q2032; Q2033; Q2034; Q2035; Q2036; Q2037; Q2038; Q2039; Q2040; Q2041; Q2042; Q2043,Count captured; circuit/footprint review remains
+B037,HP receiver reverse-BE clamp diodes,43,43,D2001; D2002; D2003; D2004; D2005; D2006; D2007; D2008; D2009; D2010; D2011; D2012; D2013; D2014; D2015; D2016; D2017; D2018; D2019; D2020; D2021; D2022; D2023; D2024; D2025; D2026; D2027; D2028; D2029; D2030; D2031; D2032; D2033; D2034; D2035; D2036; D2037; D2038; D2039; D2040; D2041; D2042; D2043,Count captured; circuit/footprint review remains
+B038,Receiver base series resistors,43,43,R2002; R2005; R2008; R2011; R2014; R2017; R2020; R2023; R2026; R2029; R2032; R2035; R2038; R2041; R2044; R2047; R2050; R2053; R2056; R2059; R2062; R2065; R2068; R2071; R2074; R2077; R2080; R2083; R2086; R2089; R2092; R2095; R2098; R2101; R2104; R2107; R2110; R2113; R2116; R2119; R2122; R2125; R2128,Count captured; circuit/footprint review remains
+B039,Receiver input termination to -2V,43,43,R2001; R2004; R2007; R2010; R2013; R2016; R2019; R2022; R2025; R2028; R2031; R2034; R2037; R2040; R2043; R2046; R2049; R2052; R2055; R2058; R2061; R2064; R2067; R2070; R2073; R2076; R2079; R2082; R2085; R2088; R2091; R2094; R2097; R2100; R2103; R2106; R2109; R2112; R2115; R2118; R2121; R2124; R2127,Count captured; circuit/footprint review remains
+B040,Receiver collector pull-ups to +3V3_HP,43,43,R2003; R2006; R2009; R2012; R2015; R2018; R2021; R2024; R2027; R2030; R2033; R2036; R2039; R2042; R2045; R2048; R2051; R2054; R2057; R2060; R2063; R2066; R2069; R2072; R2075; R2078; R2081; R2084; R2087; R2090; R2093; R2096; R2099; R2102; R2105; R2108; R2111; R2114; R2117; R2120; R2123; R2126; R2129,Count captured; circuit/footprint review remains
+B041,HP output hex inverters,4,4,U2001; U2002; U2003; U2004,Count captured; circuit/footprint review remains
+B042,HP output emitter transistors,24,24,Q2044; Q2045; Q2046; Q2047; Q2048; Q2049; Q2050; Q2051; Q2052; Q2053; Q2054; Q2055; Q2056; Q2057; Q2058; Q2059; Q2060; Q2061; Q2062; Q2063; Q2064; Q2065; Q2066; Q2067,Count captured; circuit/footprint review remains
+B043,Driver Schottky base clamps,24,24,D2044; D2045; D2046; D2047; D2048; D2049; D2050; D2051; D2052; D2053; D2054; D2055; D2056; D2057; D2058; D2059; D2060; D2061; D2062; D2063; D2064; D2065; D2066; D2067,Count captured; circuit/footprint review remains
+B044,Driver collector feed resistors,24,24,R2131; R2134; R2137; R2140; R2143; R2146; R2149; R2152; R2155; R2158; R2161; R2164; R2167; R2170; R2173; R2176; R2179; R2182; R2185; R2188; R2191; R2194; R2197; R2200,Count captured; circuit/footprint review remains
+B045,Driver +5V base-bias resistors,24,24,R2132; R2135; R2138; R2141; R2144; R2147; R2150; R2153; R2156; R2159; R2162; R2165; R2168; R2171; R2174; R2177; R2180; R2183; R2186; R2189; R2192; R2195; R2198; R2201,Count captured; circuit/footprint review remains
+B046,Driver input pull-ups to +3V3_HP,24,24,R2130; R2133; R2136; R2139; R2142; R2145; R2148; R2151; R2154; R2157; R2160; R2163; R2166; R2169; R2172; R2175; R2178; R2181; R2184; R2187; R2190; R2193; R2196; R2199,Count captured; circuit/footprint review remains
+B047,ACT04 local supply bypass,4,4,C2001; C2002; C2003; C2004,Count captured; circuit/footprint review remains
+B048,MCU,1,1,U1001,Count captured; circuit/footprint review remains
+B049,MCU VDD pin bypass,6,6,C1003; C1004; C1005; C1006; C1007; C1008,Count captured; circuit/footprint review remains
+B050,MCU VBAT bypass,1,1,C1009,Count captured; circuit/footprint review remains
+B051,MCU local bulk,1,1,C1010,Count captured; circuit/footprint review remains
+B052,MCU VCAP capacitors,2,2,C1011; C1012,Count captured; circuit/footprint review remains
+B053,VDDA filter bead,1,1,FB1001,Count captured; circuit/footprint review remains
+B054,VDDA and VREF+ HF bypass,2,2,C1014; C1015,Count captured; circuit/footprint review remains
+B055,VDDA local low-frequency bypass,1,1,C1013,Count captured; circuit/footprint review remains
+B056,Independent HSE crystal,1,1,Y1001,Count captured; circuit/footprint review remains
+B057,HSE crystal load capacitors,2,2,C1001; C1002,Count captured; circuit/footprint review remains
+B058,HSE drive-limiting position,1,1,R1001,Count captured; circuit/footprint review remains
+B059,BOOT0 BOOT1 and DEV pull-downs,3,3,R1021; R1022; R1023,Count captured; circuit/footprint review remains
+B060,MCU status LED,1,1,D1004,Count captured; circuit/footprint review remains
+B061,MCU LED current limiter,1,1,R1020,Count captured; circuit/footprint review remains
+B062,USB-C receptacle,1,1,J1001,Count captured; circuit/footprint review remains
+B063,USB protection,1,1,U1002,Count captured; circuit/footprint review remains
+B064,USB-C CC pull-downs,2,2,R1002; R1003,Count captured; circuit/footprint review remains
+B065,USB VBUS sense upper resistor,1,1,R1006,Count captured; circuit/footprint review remains
+B066,USB VBUS sense lower resistor,1,1,R1007,Count captured; circuit/footprint review remains
+B067,Connector-side VBUS ESD reference bypass,1,1,C1016,Count captured; circuit/footprint review remains
+B068,USB D+/D- series positions,2,2,R1004; R1005,Count captured; circuit/footprint review remains
+B069,USB shell-to-board-ground option,1,1,R1008,Count captured; circuit/footprint review remains
+B070,Full-size SD holder,1,1,J1002,Count captured; circuit/footprint review remains
+B071,SD card local supply bulk,1,1,C1017,Count captured; circuit/footprint review remains
+B072,SD card local HF bypass,1,1,C1018,Count captured; circuit/footprint review remains
+B073,SD card-detect and write-protect pull-ups,2,2,R1014; R1015,Count captured; circuit/footprint review remains
+B074,SDIO CMD and DAT pull-ups,5,5,R1009; R1010; R1011; R1012; R1013,Count captured; circuit/footprint review remains
+B075,SDIO source-series positions,6,0,,Not captured yet
+B076,SDIO ESD arrays,2,0,,Not captured yet
+B077,Externally supplied RS232,1,1,U1005,Count captured; circuit/footprint review remains
+B078,UART level/isolation buffer,1,1,U1006,Count captured; circuit/footprint review remains
+B079,Spare RS232 receiver translation,1,1,U1007,Count captured; circuit/footprint review remains
+B080,Pendant connector,1,0,,Not captured yet
+B081,SN75185 rail bypass,3,3,C1024; C1025; C1026,Count captured; circuit/footprint review remains
+B082,SN75185 +/-12V local bulk,2,2,C1027; C1028,Count captured; circuit/footprint review remains
+B083,UART buffer local bypass,2,2,C1029; C1030,Count captured; circuit/footprint review remains
+B084,Pendant UART logic bias and default-disable positions,4,4,R1028; R1029; R1030; R1031,Count captured; circuit/footprint review remains
+B085,UART hardware isolation enable network,,0,,Unresolved quantity
+B086,Pendant +5V current-limited switch,1,0,,Not captured yet
+B087,Pendant current-limit programming resistor,1,0,,Not captured yet
+B088,Pendant switch input bypass,1,0,,Not captured yet
+B089,Pendant protected-output local bulk,1,0,,Not captured yet
+B090,Pendant and expansion RS232 line TVS candidates,8,0,,Not captured yet
+B091,Pendant protected +5V connector TVS,1,0,,Not captured yet
+B092,Ethernet RMII PHY,1,0,,Not captured yet
+B093,Unshielded RJ45 receptacle,1,0,,Not captured yet
+B094,External Ethernet magnetics,1,0,,Not captured yet
+B095,External PHY LEDs,2,0,,Not captured yet
+B096,PHY LED current limiters,2,0,,Not captured yet
+B097,PHY analog supply bead,1,0,,Not captured yet
+B098,PHY 3.3V supply bypass,3,0,,Not captured yet
+B099,PHY analog branch bulk,1,0,,Not captured yet
+B100,PHY VDDCR local regulator output capacitor,1,0,,Not captured yet
+B101,PHY VDDCR HF bypass,1,0,,Not captured yet
+B102,PHY RBIAS resistor,1,0,,Not captured yet
+B103,PHY MDI terminations,4,0,,Not captured yet
+B104,Magnetics PHY-side bias bypass,2,0,,Not captured yet
+B105,Cable common-mode termination resistors,4,0,,Not captured yet
+B106,Cable termination coupling capacitor,1,0,,Not captured yet
+B107,PHY address mode and regulator/clock straps,6,0,,Not captured yet
+B108,MDIO pull-up,1,0,,Not captured yet
+B109,PHY hardware POR supervisor,1,0,,Not captured yet
+B110,PHY POR CT delay selector,1,0,,Not captured yet
+B111,PHY nRST pull-up,1,0,,Not captured yet
+B112,PHY POR supervisor bypass,1,0,,Not captured yet
+B113,PHY-side Ethernet MDI ESD array,1,0,,Not captured yet
+B114,Cable-side Ethernet surge/ESD protection,,0,,Unresolved quantity
+B115,PON input and reference-bias resistors,2,2,R2202; R2204,Count captured; circuit/footprint review remains
+B116,PON reset pull-up,1,1,R2203,Count captured; circuit/footprint review remains
+B117,PON signal diodes,3,3,D2068; D2069; D2070,Count captured; circuit/footprint review remains
+B118,MCU PON reset gate,1,1,U1004,Count captured; circuit/footprint review remains
+B119,MCU reset OR-gate bypass,1,1,C1023,Count captured; circuit/footprint review remains
+B120,MCU reset isolation Schottky,1,1,D1005,Count captured; circuit/footprint review remains
+B121,MCU NRST pull-up,1,1,R1027,Count captured; circuit/footprint review remains
+B122,MCU NRST capacitor,1,1,C1022,Count captured; circuit/footprint review remains
+B123,MCU reset pushbutton,1,1,SW1001,Count captured; circuit/footprint review remains
+B124,HP power detector transistor,1,1,Q1001,Count captured; circuit/footprint review remains
+B125,HP detector base input resistor,1,1,R1024,Count captured; circuit/footprint review remains
+B126,HP detector base discharge resistor,1,1,R1025,Count captured; circuit/footprint review remains
+B127,HP detector collector pull-up,1,1,R1026,Count captured; circuit/footprint review remains
+B128,FPGA JTAG header,1,1,J1,Count captured; circuit/footprint review remains
+B129,STM32 ST-LINK SWD header,1,1,J1003,Count captured; circuit/footprint review remains
+B130,BOOT0 and DEV jumper headers,2,2,J1004; J1005,Count captured; circuit/footprint review remains
+B131,BOOT0 and DEV removable shunts,2,0,,Not captured yet
+B132,Top expansion and spare RS232 connector,1,0,,Not captured yet
+B133,Wire-wrap posts,,0,,Unresolved quantity
+B134,Integrated PCB and HP card-edge fingers,1,1,J2001,Count captured; circuit/footprint review remains
+B135,Card mounting hardware and front-panel support,,0,,Unresolved quantity
+B136,Configuration and rail test pads,0,69,TP3001; TP3002; TP3003; TP3004; TP3005; TP3006; TP3007; TP3008; TP3009; TP3010; TP3011; TP3012; TP3013; TP3014; TP3015; TP3016; TP3017; TP3018; TP3019; TP3020; TP3021; TP3022; TP3023; TP3024; TP3025; TP3026; TP3027; TP3028; TP3029; TP3030; TP3031; TP3032; TP3033; TP3034; TP3035; TP3036; TP3037; TP3038; TP3039; TP3040; TP3041; TP3042; TP3043; TP3044; TP3045; TP3046; TP3047; TP3048; TP3049; TP3050; TP3051; TP3052; TP3053; TP3054; TP3055; TP3056; TP3057; TP3058; TP3059; TP3060; TP3061; TP3062; TP3063; TP3064; TP3065; TP3066; TP3067; TP3068; TP3069,PCB feature / not fitted
+B137,3.3V regulator power LEDs,2,2,D2; D1003,Count captured; circuit/footprint review remains
+B138,3.3V regulator power LED resistors,2,2,R21; R1019,Count captured; circuit/footprint review remains
+B139,1.2V regulator power LED,1,1,D3,Count captured; circuit/footprint review remains
+B140,1.2V power LED sensing transistor,1,1,Q1,Count captured; circuit/footprint review remains
+B141,1.2V power LED base resistor,1,1,R23,Count captured; circuit/footprint review remains
+B142,1.2V power LED base discharge resistor,1,1,R24,Count captured; circuit/footprint review remains
+B143,1.2V power LED series resistor,1,1,R22,Count captured; circuit/footprint review remains
+B144,RJ45 stocked alternative - not additionally fitted,0,0,,PCB feature / not fitted
