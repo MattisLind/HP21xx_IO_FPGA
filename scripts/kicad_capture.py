@@ -604,7 +604,7 @@ def mcu_sheet(sh,mc,mcn):
     for i,n in enumerate(['UART_TX2','UART_TX3']):
         sh.r(362+i*25,273,'+3V3_HP',n,'Pendant UART logic bias and default-disable positions','10k')
     sh.text('H10 OPEN: pendant numbered pinout; current limit; /OE hardware gate; connector protection.',202,212,0.9,True)
-    sh.text('H06 OPEN: PHY line-side magnetics/straps/ESD and RJ45 selection need circuit review.',202,219,0.9,True)
+    sh.text('H06 OPEN: PHY line-side magnetics/straps/ESD and accepted MTJ-885X1 footprint need review.',202,219,0.9,True)
     sh.text('Ethernet PHY/magnetics capture remains open; no fabricated cable pin numbers.',202,226,0.8)
 
 

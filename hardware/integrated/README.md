@@ -77,9 +77,14 @@ procurement/design baseline; do not order from the partial schematic BOM.
 - Review reset/partial-power behavior, FPGA configuration bias, PON levels,
   resistor dissipation, crystal startup, power LED sensing and HP timing.
 
-The unshielded RJ45 choice remains MTJ-885X1 with sourcing open, with the
-stocked Molex 85503-5001 recorded as a zero-quantity alternative in the BOM.
-Schematic capture does not imply acceptance of that alternative.
+Both debug headers are vertical THT: FPGA **ZL231-14PG** and STM32 SWD
+**ZL231-20PG / DS1013-20SSIB1-B-0**. Exact footprints and mated service-cable
+clearance remain to verify.
+
+The accepted unshielded RJ45 is **Adam Tech MTJ-885X1 / TME MTJ-885X1**;
+the user confirmed TME availability and selected it on 2026-11-08. Its maximum
+installed height and footprint still need review. Molex 85503-5001 remains
+an unselected, zero-quantity research alternative in the BOM.
 
 ## Files and repeatable checks
 

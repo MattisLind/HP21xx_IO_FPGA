@@ -15,9 +15,11 @@ inductor/capacitor/feedback selections, 2.54 mm headers, 4P4C jack and spare
 RS-232 routing are recorded in the design. Ethernet now uses an unshielded
 TME-sourced THT RJ45 with external SMT magnetics and external LEDs. The
 expanded functional BOM includes HP channels, power and interface support,
-LCSC/TME identities and explicit provisional/TBD items. TME RJ45 orderability
-remains open; a stocked Molex Cat 5e alternative is recorded for selection.
-HRO USB-C/C165948 is restored for JLCPCB SMT assembly. Debug headers, common
+LCSC/TME identities and explicit provisional/TBD items. MTJ-885X1 is accepted:
+the user confirmed TME availability on 2026-11-08. The Molex alternative
+remains unselected with zero quantity; jack height/footprint review remains.
+HRO USB-C/C165948 is restored for JLCPCB SMT assembly. Both debug headers
+are vertical THT: ZL231-14PG and ZL231-20PG. Debug headers, common
 100 nF capacitors, LEDs and external magnetics are accepted; three regulator
 power indicators are included. Stock counts are not tracked.
 

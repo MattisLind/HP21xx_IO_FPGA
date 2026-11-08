@@ -72,7 +72,7 @@ HP 13210/7900 disk emulation is the first application, not the hardware's scope.
 | Boot platform | Pendant supports dynamic application/gateware selection from SD. Resident STM32 SD loader validates the selected pair, avoids rewriting matching images, and supports checking/updating the FPGA image against the selected profile. |
 | Recovery/debug | BOOT0 selection, STM32 reset button and **SWD-only MCU debug** on PA13/PA14. Disable MCU JTAG and SWO/parallel trace; PA15/PB3/PB4 are expansion GPIO. Factory ROM DFU installs/recovers the resident SD loader. |
 | Expansion | Top connector/wire-wrap exposes spare FPGA and STM32 GPIO, PA4/PA5 general expansion pins, and FSMC nets for reuse after full MCU release. FPGA P66/P62 remain included. |
-| Ethernet | STM32 **RMII** → LAN8720A → **Pulse H1102NLT/C18584 external magnetics** → **Adam Tech MTJ-885X1 unshielded THT RJ45**, sourced from TME; separate board LEDs; 10/100 Mb/s, no Gigabit requirement. TME orderability remains open. |
+| Ethernet | STM32 **RMII** → LAN8720A → **Pulse H1102NLT/C18584 external magnetics** → **Adam Tech MTJ-885X1 unshielded THT RJ45**, sourced from TME; separate board LEDs; 10/100 Mb/s, no Gigabit requirement. User selected the jack and confirmed TME availability on 2026-11-08. |
 | Mechanical height | **5/8 inch (15.875 mm ≈ 15.9 mm) card pitch**, **1.6 mm PCB**; allow **at most 12.8 mm above the component-side PCB surface**, accounting for the adjacent card's solder-side leads. |
 | Power | HP 4.85 V / 50 A and −2 V / 15 A machine supplies reported available. Separate MCU regulator fed through Schottkys from HP and USB; ±12 V available for RS-232; +28 V unused. |
 | Schematic organization | Four **A3** sheets: FPGA; STM32 and its peripherals; HP connector/receivers/drivers; top connector/expansion/wire-wrap. |
@@ -155,7 +155,7 @@ The MCU-to-FPGA JTAG, FSMC and DONE links belong in the device sections.
 | Removable full-size SD card | SD socket with mechanical present/write-protect switches | Platform profiles, images and application data; 3.3.4 |
 | External control/debug pendant | Four-conductor 4P4C/RJ10: +5 V, GND, RS-232 TX/RX | UI/buttons and serial debugging; 3.3.5 |
 | Experimental circuitry / external peripheral | Top connector and wire-wrap posts for available FPGA/MCU signals, labelled supply/ground | Application-specific extension; 3.2.4/3.2.6/3.3.9 |
-| External service/programming tools | Local 14-pin 2.54 mm FPGA connector and right-angle 20-pin 2.54 mm ST-LINK/SWD header | External maintenance access; 3.2.3.2 and 3.4 |
+| External service/programming tools | Local 14-pin 2.54 mm FPGA connector and vertical 20-pin 2.54 mm ST-LINK/SWD header | External maintenance access; 3.2.3.2 and 3.4 |
 
 HP machine capacity is reported as **4.85 V / 50 A** and **−2 V / 15 A**.
 The board may also use ±12 V for RS-232 and future analog conditioning;
@@ -974,14 +974,15 @@ control wires plus MDC and MDIO. [STM32 Ethernet capability][stm32-product].
 | --- | --- | --- | --- |
 | RMII PHY | **Microchip LAN8720A-CP-TR**, 24-QFN 4 × 4 mm | JLCPCB **C45223**, Standard assembly | 10/100 RMII; shared external 50 MHz clock. |
 | External magnetics | **Pulse H1102NLT**, 16-pin SMT transformer/choke module | JLCPCB **C18584** | Separate 1:1 TX/RX isolation transformers and common-mode chokes; non-PoE; Pulse lists LAN8720A compatibility. Nominal height **5.969 mm**. |
-| Unshielded RJ45 | **Adam Tech MTJ-885X1**, right-angle THT with PCB snap retention | **TME MTJ-885X1** | Plastic housing; **no metallic shield, magnetics or LEDs**. Nominal height approximately **11.7 mm**, leaving **1.1 mm** nominal margin. Confirm drawing tolerances and orderability before PCB release. |
+| Unshielded RJ45 | **Adam Tech MTJ-885X1**, right-angle THT with PCB snap retention | **TME MTJ-885X1** | Accepted; user confirmed TME availability. Plastic housing; **no metallic shield, magnetics or LEDs**. Nominal height approximately **11.7 mm**, leaving **1.1 mm** nominal margin. Confirm drawing tolerances and footprint before PCB release. |
 | External indicators | Two board-mounted LEDs and separate current-limit resistors | JLCPCB; accepted **KT-0603R/C2286** and **470 Ω/C23179** | Link/activity and speed/status indication; wire LED polarity around PHY strap requirements. Initial red LEDs reduce distinct parts; brightness/current remain to validate. |
 | RMII reference clock | Shared source and CDCLVC1104 fan-out, 3.2.2 | **C5203552 / C485518** | Separate buffered PHY/MAC clock branches. |
 
-The **MTJ-885X1** is the selected low-cost mechanical candidate, but TME
-showed no stock during sourcing research. Procurement remains open; do not
-assume immediate availability. A same-function alternative needs its own
-height, electrical category, retention and footprint checks. The
+The **MTJ-885X1** is the accepted jack. The user confirmed TME availability
+and selected it on **2026-11-08**, closing the earlier sourcing question.
+Maximum installed height and the exact footprint still need drawing review.
+A same-function alternative needs its own height, electrical category,
+retention and footprint checks. The
 **MTJ-889X1** is nominally about **12.3 mm** high and has less margin; it
 also showed no stock. [TME jack][ethernet-jack-tme],
 [Adam Tech catalog][ethernet-jack-catalog],
@@ -989,10 +990,10 @@ also showed no stock. [TME jack][ethernet-jack-tme],
 [Pulse product/compatibility reference][ethernet-magnetics-product],
 [Pulse drawing][ethernet-magnetics-ds].
 
-A stocked alternative is **Molex 85503-5001 / TME MX-85503-5001**:
+The researched alternative **Molex 85503-5001 / TME MX-85503-5001** is
 unshielded Cat 5e, right-angle THT with PCB retention, no magnetics or LEDs,
-**11.5 mm nominal** height. It is recommended for procurement but remains a
-zero-quantity alternative pending user selection. Its footprint and maximum
+**11.5 mm nominal** height. It remains a zero-quantity, unselected research
+alternative; purchase MTJ-885X1. Its footprint and maximum
 installed height need review. Additional checked candidates and exclusions
 are in the [BOM sourcing notes](INTEGRATED_BOARD_BOM.md#additional-tme-rj45-research).
 
@@ -1242,9 +1243,13 @@ separately in the BOM. The power allowances retain margin for these loads.
 
 Use an **active-low PE4 status LED**. The accepted parts are KT-0603R/C2286 and
 470 Ω/C23179; validate brightness and GPIO current at capture.
-The MCU debug header is **ST-LINK 2 × 10, 2.54 mm, right angle**;
-the accepted header is **CONNFLY DS1013-20RSIB / TME ZL231-20KG**.
-Use its own drawing and footprint. Implement the standard 20-pin electrical
+The MCU debug header is **ST-LINK 2 × 10, 2.54 mm, vertical**;
+the accepted header is **CONNFLY DS1013-20SSIB1-B-0 / TME ZL231-20PG**.
+Both debug headers are vertical THT. The CONNFLY vertical drawing shows
+8.8 mm body height plus a 0.30 mm standoff (about 9.1 mm installed nominal),
+leaving about 3.7 mm nominal margin under the 12.8 mm limit. Maximum tolerance
+and mated service-cable clearance still need review. Use its own drawing and
+footprint. Implement the standard 20-pin electrical
 allocation for **SWD only**:
 
 | Header pin(s) | Connection |
@@ -1259,8 +1264,8 @@ allocation for **SWD only**:
 
 MCU JTAG and SWO/parallel trace stay disabled. PA15/PB3/PB4 are expansion
 GPIO and have no connection to their JTAG cable positions. The FPGA has its
-separate **2 × 7, 2.54 mm** JTAG header. [ST-LINK UM1075][stlink],
-[right-angle header][swd-header].
+separate **vertical 2 × 7, 2.54 mm** JTAG header. [ST-LINK UM1075][stlink],
+[vertical header][swd-header].
 
 Remaining hardware work is listed in **section 5**.
 
@@ -1507,7 +1512,7 @@ grounded and single configuration file above are the current design.
 | H03 | 3.2.1 / 3.3.1 | Validate the selected buck LC parts, effective capacitance, layout, FPGA power estimate, startup/thermal behavior and per-slot power path. Establish HP output/pendant currents and USB current/inrush/suspend policy. |
 | H04 | 3.2.7 / 3.3.7 | Validate reset gate/RC/button/diode operation and any additional rail supervision; verify PON/NRST/PROGRAM_B low levels, diode drops, flash readiness and USB-only startup without backpower or reset clamping. |
 | H05 | 3.2.2 / 3.3.2 | Qualify the shared 50 MHz oscillator/fan-out and proposed 8 MHz crystal/load capacitors; verify HSE/USB clock startup. Decide whether RTC crystal/battery support is needed. |
-| H06 | 3.3.8 | Verify RMII timing/jitter with the shared oscillator/fan-out; confirm MTJ-885X1 TME orderability and maximum height; validate H1102NLT external magnetics/centre-tap bias, proposed hardware POR, straps, MDIO bias, cable termination/ESD/isolation network, external LED wiring/current and 10/100 current measurements. |
+| H06 | 3.3.8 | Verify RMII timing/jitter with the shared oscillator/fan-out; confirm accepted MTJ-885X1 maximum installed height and footprint; validate H1102NLT external magnetics/centre-tap bias, proposed hardware POR, straps, MDIO bias, cable termination/ESD/isolation network, external LED wiring/current and 10/100 current measurements. |
 | H07 | 3.2.3 | Choose INIT_B/DONE/flash bias values and header footprint; verify startup pull-ups, bitstream pin settings and inactive HP states through reset, configuration and JTAG bridge operation. |
 | H08 | 3.2.5 | Validate receiver/driver thresholds, rise/fall times, transistor/ACT loading, resistor package dissipation and HP timing under real loads. |
 | H09 | 3.3.3 / 3.3.4 | Finalize USB/SD footprints, ESD/ground routing and any SD power switching; verify PB0 divider tolerances/leakage and SD switch behavior. |
@@ -1666,7 +1671,7 @@ FPGA/receiver/driver channels; RUN drive remains inactive in the current image.
 [serial-exp-buffer]: https://www.ti.com/lit/ds/symlink/sn74lvc125a.pdf
 [reset-gate]: https://www.ti.com/lit/ds/symlink/sn74lvc1g32.pdf
 [stlink]: https://www.st.com/resource/en/user_manual/um1075-stlink-v2-in-circuit-debugger-stlink-v2-1-stlink-v2-ct-stlink-v3-pg00061083.pdf
-[swd-header]: https://www.tme.eu/en/details/zl231-20kg/idc-connectors/connfly/ds1013-20rsib/
+[swd-header]: https://www.tme.eu/en/details/zl231-20pg/idc-connectors/connfly/ds1013-20ssib1-b-0/
 
 [ethernet-jack-tme]: https://www.tme.eu/en/details/mtj-885x1/rj-connectors/adam-tech/
 [ethernet-jack-catalog]: https://app.adam-tech.com/resources/download/65/ecatalog-2025-1.pdf

@@ -94,9 +94,9 @@ its HP edge fingers are fabrication items, not a purchased card-edge socket.
 
 - Pendant: **Molex 95501-2441**, TME **MX-95501-2441**, 11.5 mm nominal.
 - Ethernet jack: **Adam Tech MTJ-885X1**, TME **MTJ-885X1**, about 11.7 mm
-  nominal; unshielded, no magnetics, no LEDs. TME showed no stock, so its
-  orderability is an explicit procurement gap. Do not substitute a taller
-  jack without mechanical review.
+  nominal; unshielded, no magnetics, no LEDs. **Accepted**: the user confirmed
+  TME availability and selected this jack on 2026-11-08. Verify maximum
+  installed height and footprint before PCB release.
 - External Ethernet magnetics: **Pulse H1102NLT, C18584**, JLCPCB Extended.
   Pulse lists LAN8720A among compatible PHYs. The 12.7 × 7.1 mm catalog body
   does not describe the full lead span; use the manufacturer footprint.
@@ -110,9 +110,14 @@ its HP edge fingers are fabrication items, not a purchased card-edge socket.
   Both are nominal 100 nF / 50 V / X7R / 10% / 0603. Common resistors, LEDs
   and links use checked Basic listings where available to reduce feeder fees.
 - User-accepted low-cost TME debug headers are CONNFLY **ZL231-14PG** and
-  **ZL231-20KG**, replacing the unspecified FPGA header and Samtec SWD
-  purchasing choice. Verify installed height, pin numbering, cable keying
-  and mating clearances.
+  **ZL231-20PG**; both are vertical THT. The SWD header is now CONNFLY
+  **DS1013-20SSIB1-B-0**, replacing the right-angle ZL231-20KG. TME lists
+  about US$0.40 net each from two, with a two-piece minimum (one per board).
+  The [manufacturer drawing](https://en.connfly.com/static/upload/file/pdf/DS1013.pdf)
+  shows about 9.1 mm nominal installed height (8.8 mm body + 0.30 mm standoff).
+  Verify maximum installed height, exact footprint, pin numbering, cable
+  keying and mating clearances.
+  [Vertical SWD header at TME](https://www.tme.eu/en/details/zl231-20pg/idc-connectors/connfly/ds1013-20ssib1-b-0/).
 - USB-C is restored to **HRO TYPE-C-31-M-12/C165948**, accepted for supply
   and SMT soldering by JLCPCB. The GCT/TME proposal is removed from both CSVs.
 - The **100 nF C14663** capacitors, **C2286 LEDs**, debug headers and
@@ -134,7 +139,7 @@ base drive. The core LED branch itself loads +3V3_HP.
 
 | Part | Installed-height information | Assessment |
 | --- | --- | --- |
-| **Molex 85503-5001 / MX-85503-5001** | **11.5 mm nominal**; 1.3 mm nominal headroom | **Recommended stocked alternative**: Cat 5e, unshielded, right-angle THT, PCB retention, no LEDs/magnetics. TME showed stock; indicative net US$2.14 at one, US$1.85 at ten. Manufacturer maximum-height drawing and footprint still need approval. Recorded as a zero-quantity alternative, pending user selection. |
+| **Molex 85503-5001 / MX-85503-5001** | **11.5 mm nominal**; 1.3 mm nominal headroom | **Not selected**; retained as a zero-quantity research alternative. Cat 5e, unshielded, right-angle THT, PCB retention, no LEDs/magnetics. TME showed stock during research; indicative net US$2.14 at one, US$1.85 at ten. User selected MTJ-885X1. Any future substitution requires drawing and footprint review. |
 | Adam Tech MTJ-880X1 | 0.498 inch (about 12.65 mm) catalog family height | Only about 0.15 mm nominal headroom; insufficient margin to approve without maximum installed-height drawing. TME showed no stock. |
 | Adam Tech MTJ-889X1 | About 12.3 mm nominal | Unshielded THT, less margin than MTJ-885X1; TME showed no stock. |
 | TE 1116503-2 | 9.58 mm catalog height | Rejected for this request: manufacturer confirms a metal shield; TME showed no stock. |
