@@ -3,7 +3,7 @@
 ## Q-08: Integrated PCB design review
 
 The current design is [INTEGRATED_BOARD_DESIGN.md](INTEGRATED_BOARD_DESIGN.md),
-revision **0.7, 2026-11-05**. Review precedes the integrated-board schematic.
+revision **0.9, 2026-11-08**. Review precedes the integrated-board schematic.
 The document defines component selections, complete Usage-labelled pin maps,
 SWD-only MCU debug, the single `HP21xx_IO_FPGA.cfg` structure, HSWAPEN low,
 SUSPEND grounded and the PB0 VBUS divider. The supplied `IOB Proto Board`
@@ -11,12 +11,20 @@ KiCad project is the mechanical input for layout, including 1.6 mm wire-wrap
 pads and 0.8 mm drills. AUX1/P67↔PB8 and AUX2/P74↔PB9 are fitted. PA4/PA5
 are uncommitted; there is no X/Y display requirement. Shared-clock, buck
 inductor/capacitor/feedback selections, 2.54 mm headers, 4P4C jack and spare
-RS-232 routing are recorded in the design. Stock counts are not tracked.
+RS-232 routing are recorded in the design. Ethernet now uses an unshielded
+TME-sourced THT RJ45 with external SMT magnetics and external LEDs. The
+expanded functional BOM includes HP channels, power and interface support,
+LCSC/TME identities and explicit provisional/TBD items. TME RJ45 orderability
+remains open; a stocked Molex Cat 5e alternative is recorded for selection.
+HRO USB-C/C165948 is restored for JLCPCB SMT assembly. Debug headers, common
+100 nF capacitors, LEDs and external magnetics are accepted; three regulator
+power indicators are included. Stock counts are not tracked.
 
 Use **[section 5: Open issues](INTEGRATED_BOARD_DESIGN.md#5-open-issues)** for
 the consolidated hardware/software review list. Supporting
 [power calculations](INTEGRATED_BOARD_POWER.md),
-[component list](INTEGRATED_BOARD_BOM.csv),
+[functional BOM](INTEGRATED_BOARD_BOM.csv),
+[BOM quantity/sourcing notes](INTEGRATED_BOARD_BOM.md),
 [STM32 pins](INTEGRATED_BOARD_STM32_PINS.csv) and
 [FPGA pins](INTEGRATED_BOARD_FPGA_PINS.csv) are saved alongside it.
 

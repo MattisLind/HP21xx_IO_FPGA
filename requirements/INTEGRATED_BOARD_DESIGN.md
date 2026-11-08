@@ -1,6 +1,6 @@
 # Integrated HP 21xx I/O platform: design review
 
-Revision **0.7 — 2026-11-05 — design review**.
+Revision **0.9 — 2026-11-08 — accepted BOM choices and rail indicators**.
 
 This document defines the current design of the integrated HP 21xx I/O board.
 The first application is HP 13210/7900 disk emulation; the platform supports
@@ -13,9 +13,17 @@ current design. Remaining decisions and verification work are collected in
 completed circuit and each supported application.
 
 The [power calculation](INTEGRATED_BOARD_POWER.md),
-[component list](INTEGRATED_BOARD_BOM.csv),
+[functional BOM](INTEGRATED_BOARD_BOM.csv) and its
+[quantity/sourcing notes](INTEGRATED_BOARD_BOM.md),
 [STM32 pin inventory](INTEGRATED_BOARD_STM32_PINS.csv) and
 [FPGA pin inventory](INTEGRATED_BOARD_FPGA_PINS.csv) accompany this document.
+The BOM includes selected devices, proposed support parts and explicit unresolved
+items. It is a design/procurement baseline, not a schematic-derived assembly
+release. Through-hole components are sourced from **TME**; surface-mount parts
+use **JLCPCB/LCSC** where matched. **HRO TYPE-C-31-M-12/C165948** is
+supplied and soldered by JLCPCB in SMT assembly, as explicitly selected. All installed components must
+remain within the **12.8 mm** envelope.
+
 The [HP bus workbook](HP%2021xx%20IO%20bus.xlsx) and
 [STM32 workbook](STM32F407VET.xlsx) provide signal-allocation references.
 The [prototype KiCad board](../IOB%20Proto%20Board/IOB%20Proto%20Board.kicad_pcb)
@@ -50,7 +58,7 @@ HP 13210/7900 disk emulation is the first application, not the hardware's scope.
 | FPGA clock and indication | Shared 50 MHz source, buffered to P56. **P143 active high: FPGA pin → LED/resistor series path → GND**. |
 | Processor | **STM32F407VGT6, LCSC C12345**, LQFP100/**1 MiB** flash. |
 | Storage | Full-size SD, four-bit SDIO; **PC7 card present**, **PB1 write protect**. |
-| USB | **HRO TYPE-C-31-M-12, C165948**, with **USBLC6-2SC6, C21713975** protection, for USB communications and factory-ROM DFU. VBUS detection required, away from PA9. |
+| USB | **HRO TYPE-C-31-M-12/C165948**, supplied and soldered by JLCPCB, with **USBLC6-2SC6, C21713975** protection, for USB communications and factory-ROM DFU. VBUS detection required, away from PA9. |
 | Pendant | **4P4C/RJ10**, exactly four conductors: +5 V, GND, RS-232 TX and RX. MCU **PA9/PA10 USART1** also supports debugging. |
 | HP electrical interface | Reuse the receiver/driver circuits from [HP21xxReceiverDriver][receiver-repo], incorporating its corrected 3.3 V driver-input bias. |
 | PON | Resistor/diode conditioning to FPGA PROGRAM_B, with power-aware gating and one BAT54 isolating the MCU reset button. |
@@ -59,7 +67,7 @@ HP 13210/7900 disk emulation is the first application, not the hardware's scope.
 | Boot platform | Pendant supports dynamic application/gateware selection from SD. Resident STM32 SD loader validates the selected pair, avoids rewriting matching images, and supports checking/updating the FPGA image against the selected profile. |
 | Recovery/debug | BOOT0 selection, STM32 reset button and **SWD-only MCU debug** on PA13/PA14. Disable MCU JTAG and SWO/parallel trace; PA15/PB3/PB4 are expansion GPIO. Factory ROM DFU installs/recovers the resident SD loader. |
 | Expansion | Top connector/wire-wrap exposes spare FPGA and STM32 GPIO, PA4/PA5 general expansion pins, and FSMC nets for reuse after full MCU release. FPGA P66/P62 remain included. |
-| Ethernet | STM32 **RMII** → LAN8720A → **Pulse JXD1-1V17NL** low-profile through-hole RJ45 with integrated magnetics; 10/100 Mb/s, no Gigabit requirement. |
+| Ethernet | STM32 **RMII** → LAN8720A → **Pulse H1102NLT/C18584 external magnetics** → **Adam Tech MTJ-885X1 unshielded THT RJ45**, sourced from TME; separate board LEDs; 10/100 Mb/s, no Gigabit requirement. TME orderability remains open. |
 | Mechanical height | **5/8 inch (15.875 mm ≈ 15.9 mm) card pitch**, **1.6 mm PCB**; allow **at most 12.8 mm above the component-side PCB surface**, accounting for the adjacent card's solder-side leads. |
 | Power | HP 4.85 V / 50 A and −2 V / 15 A machine supplies reported available. Separate MCU regulator fed through Schottkys from HP and USB; ±12 V available for RS-232; +28 V unused. |
 | Schematic organization | Four **A3** sheets: FPGA; STM32 and its peripherals; HP connector/receivers/drivers; top connector/expansion/wire-wrap. |
@@ -76,7 +84,8 @@ flowchart LR
     SD[Full-size SD socket] <--> MCU
     USB[USB-C\nUSB FS device and ROM DFU] <--> MCU
     MCU <-- RMII --> PHY[10/100 PHY\nLAN8720A]
-    PHY <--> NET[JXD1-1V17NL RJ45\nintegrated magnetics to LAN]
+    PHY <--> MAG[H1102NLT external magnetics]
+    MAG <--> NET[MTJ-885X1 unshielded THT RJ45\nseparate link/activity and speed LEDs]
     CLK[Shared 50 MHz oscillator\nand CDCLVC1104 fan-out] --> FPGA
     CLK --> PHY
     CLK -- RMII reference --> MCU
@@ -152,8 +161,8 @@ to be checked. USB host operation/USB PD and Ethernet PoE are not requested.
 
 Selected **Xilinx XC6SLX9-2TQG144C, LCSC C27408**, commercial grade,
 TQG144, speed −2; use ISE target `xc6slx9-2-tqg144` and the pin inventory below. Preserve **P143 active-high LED**: FPGA pin →
-LED/resistor series path → GND. LED current remains
-to be selected; the disk gateware currently uses activity pulses and heartbeat.
+LED/resistor series path → GND. The accepted LED is **KT-0603R/C2286**,
+with **470 Ω/C23179**; verify current and brightness; the disk gateware currently uses activity pulses and heartbeat.
 
 The [configuration guide][ug380], [electrical data sheet][ds162] and installed
 `xc6slx9_tqg144.bsd` package file are the pin/supply references.
@@ -330,7 +339,8 @@ Cable** interface, with these electrical assignments:
 
 Check the user's dongle orientation, pin-1 marking and footprint numbering
 against the actual 2.54 mm cable. These signal assignments follow
-[DS593 figure 14][jtag-cable]; the connector ordering code is still open.
+[DS593 figure 14][jtag-cable]; the accepted header is TME **CONNFLY DS1013-14SSIBG / ZL231-14PG**;
+verify its drawing, height and mated-cable clearance before capture.
 Do not wire INIT_B/PROGRAM_B to the cable's alternate serial/SPI-mode positions.
 
 **100–220 Ω series footprints** go in the three MCU output branches,
@@ -736,7 +746,7 @@ the power-aware gating in **3.3.7**.
 
 Use **Samsung CL10A225KO8NNNC/C23630, 2.2 µF/16 V X5R, 0603**, one at
 each VCAP pin. Provide 100 nF at each VDD pin and a 4.7 µF local MCU bulk
-capacitor; **CL10B104KB8NNNC/C1591** and **GRM21BR71A475KA73L/C86039**
+capacitor; **CC0603KRX7R9BB104/C14663** and **GRM21BR71A475KA73L/C86039**
 are the selected common bypass/bulk parts. Keep VCAP outputs local to the MCU.
 Implement VDDA/VREF filtering and local capacitors from the ST hardware guide.
 
@@ -748,16 +758,22 @@ USB DFU must not depend on a configured FPGA or its oscillator.
 
 Use **168 MHz CPU / 48 MHz USB** application clocks. ROM DFU configures its own clocks. The independent
 8 MHz reference meets the documented bootloader HSE range and is preferred
-over higher-frequency choices for ROM clock detection. Exact crystal/package
-and capacitor values remain to be selected. RTC crystal/battery support is
+over higher-frequency choices for ROM clock detection. The BOM proposes **Lucki L538S080L11L/C5917268**, a passive 8 MHz crystal
+with **12 pF load and 50 Ω ESR**, plus two **18 pF C0G capacitors/C1647**
+as a starting point (assuming 3 pF combined stray capacitance). Validate
+crystal drive level, oscillator gain margin and startup over temperature;
+these support selections remain provisional. RTC crystal/battery support is
 open; no RTC requirement was agreed. [ST hardware guide][stm32-hw],
 [bootloader clock requirements][an2606].
 
 #### 3.3.3 USB-C and USB protection
 
-Use **HRO TYPE-C-31-M-12, C165948**, and **USBLC6-2SC6, C21713975**, as
-selected. The latter code is cataloged as **GOODWORK**, not STMicroelectronics;
-use its own data sheet/pinout when assigning the symbol and footprint.
+Use the user-selected **HRO TYPE-C-31-M-12/C165948** USB-C receptacle,
+supplied and soldered by **JLCPCB SMT assembly**, with the selected
+**USBLC6-2SC6/C21713975** protection array. Use the exact HRO footprint
+and retention details. This restores the original HRO selection and removes
+the GCT/TME proposal. The protection code is cataloged as **GOODWORK**, not
+STMicroelectronics; use its own data sheet and pinout.
 [Selected connector][usb-connector], [selected protection part][usb-esd].
 
 USB remains a USB 2.0 **full-speed device** connection, with PA11 as
@@ -829,13 +845,19 @@ ESD and optional switched card power remain to be finalized. Start SDIO at
 
 #### 3.3.5 Debug and pendant serial port — RS-232
 
-Use **TE Connectivity 1-1705949-1**, **4P4C** (sold as RJ22; also commonly
-called RJ9/RJ10), right-angle through-hole, with a horizontal cable exit.
-TE specifies **11.5 mm height** and a **1.6 mm PCB**, giving **1.3 mm nominal
-headroom** below the 12.8 mm limit. Use the manufacturer's locating holes and
-footprint, check height tolerances at capture, and reserve cable/latch access
-at the board edge. Its contact rating is 1.5 A; pendant supply protection and
-current limit are set separately. [Selected jack and drawing][pendant-jack].
+Use **Molex 95501-2441**, TME symbol **MX-95501-2441**, **4P4C**
+(commonly sold as RJ9/RJ10), right-angle through-hole with PCB retention and
+a horizontal cable exit. Its **11.5 mm nominal height** leaves **1.3 mm nominal
+headroom** below the 12.8 mm limit. Use its own footprint and verify maximum
+installed height, board thickness, numbered contact pinout and latch access.
+No LEDs or magnetics are present in this pendant connector.
+[Selected jack][pendant-jack], [TME ordering page][pendant-jack-tme].
+
+The earlier **TE Connectivity 1-1705949-1**, also 11.5 mm high, is superseded
+for this BOM by the TME-sourced Molex part. The BOM includes a proposed
+**TPS2553DBVR/C55266** high-side current-limited +5 V switch. The pendant
+load/cable budget and its ILIM resistor remain open; do not infer them from
+the connector's 1.5 A contact rating.
 
 **Alternative:** **TE Connectivity 215875-1**, also right-angle through-hole
 4P4C, **11.5 mm** high, for a 1.6 mm PCB; this version has no panel stops.
@@ -916,8 +938,8 @@ jumper to `+3V3_MCU`. Fitted jumper means DEV.
 #### 3.3.7 Reset
 
 At **MCU_NRST**, fit **10 kΩ to `+3V3_MCU`**, **100 nF to GND**, the reset
-button to GND, and the ST-LINK NRST connection. Select **RC0603FR-0710KL**
-and **CL10B104KB8NNNC/C1591** for the local resistor/capacitor. Their nominal
+button to GND, and the ST-LINK NRST connection. The BOM proposes **UNI-ROYAL 0603WAF1002T5E/C25804**
+and **CC0603KRX7R9BB104/C14663** for the local resistor/capacitor. Their nominal
 RC product is 1 ms; the internal NRST pull-up and thresholds affect release.
 The **BAT54 anode is at MCU_NRST**; its cathode is on the conditioned PON
 reset branch, via the power-aware gate in 3.2.7.
@@ -943,36 +965,42 @@ control wires plus MDC and MDIO. [STM32 Ethernet capability][stm32-product].
 
 **Selected Ethernet components**
 
-| Function | Part | LCSC | Implementation notes |
+| Function | Part | Source | Implementation notes |
 | --- | --- | --- | --- |
-| RMII PHY | **Microchip LAN8720A-CP-TR**, 24-QFN 4 × 4 mm | **C45223** | 10/100 PHY with Auto-MDIX and 3.3 V operation; Standard assembly footprint. |
-| RJ45 plus magnetics | **Pulse JXD1-1V17NL**, low-profile right-angle through-hole, green/orange and yellow LEDs | —; separately sourced / hand-fitted | Integrated 1:1 TX/RX isolation transformers and common-mode chokes; no EMI fingers; no separate transformer required. |
-| RMII reference clock | Shared source and CDCLVC1104 fan-out, 3.2.2 | **C5203552 / C485518** | Separate buffered PHY/MAC clock branches |
+| RMII PHY | **Microchip LAN8720A-CP-TR**, 24-QFN 4 × 4 mm | JLCPCB **C45223**, Standard assembly | 10/100 RMII; shared external 50 MHz clock. |
+| External magnetics | **Pulse H1102NLT**, 16-pin SMT transformer/choke module | JLCPCB **C18584** | Separate 1:1 TX/RX isolation transformers and common-mode chokes; non-PoE; Pulse lists LAN8720A compatibility. Nominal height **5.969 mm**. |
+| Unshielded RJ45 | **Adam Tech MTJ-885X1**, right-angle THT with PCB snap retention | **TME MTJ-885X1** | Plastic housing; **no metallic shield, magnetics or LEDs**. Nominal height approximately **11.7 mm**, leaving **1.1 mm** nominal margin. Confirm drawing tolerances and orderability before PCB release. |
+| External indicators | Two board-mounted LEDs and separate current-limit resistors | JLCPCB; accepted **KT-0603R/C2286** and **470 Ω/C23179** | Link/activity and speed/status indication; wire LED polarity around PHY strap requirements. Initial red LEDs reduce distinct parts; brightness/current remain to validate. |
+| RMII reference clock | Shared source and CDCLVC1104 fan-out, 3.2.2 | **C5203552 / C485518** | Separate buffered PHY/MAC clock branches. |
 
-The **JXD1-1V17NL** fits the **12.8 mm component-side height limit** without
-a PCB cutout. Pulse's J507 mechanical drawing gives **11.30 ±0.38 mm** for
-the version without EMI fingers: **11.68 mm maximum**, leaving **1.12 mm**
-headroom when seated as drawn. Body depth is **24.11 ±0.38 mm** and width
-**17.78 ±0.38 mm**. Check the footprint, panel opening and mated plug/latch
-clearance at layout. The jack remains shielded despite having no spring EMI
-fingers. [Pulse data sheet][ethernet-jack-ds],
-[checked J507.A drawing, pages 1–3][ethernet-jack-checked-ds],
-[PHY catalog][ethernet-phy-jlc].
+The **MTJ-885X1** is the selected low-cost mechanical candidate, but TME
+showed no stock during sourcing research. Procurement remains open; do not
+assume immediate availability. A same-function alternative needs its own
+height, electrical category, retention and footprint checks. The
+**MTJ-889X1** is nominally about **12.3 mm** high and has less margin; it
+also showed no stock. [TME jack][ethernet-jack-tme],
+[Adam Tech catalog][ethernet-jack-catalog],
+[JLCPCB magnetics][ethernet-magnetics-jlc],
+[Pulse product/compatibility reference][ethernet-magnetics-product],
+[Pulse drawing][ethernet-magnetics-ds].
 
-**RJ45 alternatives and exclusions**
+A stocked alternative is **Molex 85503-5001 / TME MX-85503-5001**:
+unshielded Cat 5e, right-angle THT with PCB retention, no magnetics or LEDs,
+**11.5 mm nominal** height. It is recommended for procurement but remains a
+zero-quantity alternative pending user selection. Its footprint and maximum
+installed height need review. Additional checked candidates and exclusions
+are in the [BOM sourcing notes](INTEGRATED_BOARD_BOM.md#additional-tme-rj45-research).
 
-| Part | Magnetics / mounting | Height and fit assessment |
-| --- | --- | --- |
-| **Taoglas TMJ19911ADNL** | Integrated 10/100 magnetics and LEDs; recessed/mid-mount | Drawing shows **8.90 mm** from PCB seating plane to housing top, plus **2.00 mm** upper EMI fingers: approximately **10.90 mm above PCB**, nominal. The **11.35 mm** body extends approximately **2.45 mm below the seating plane**, or **0.85 mm below a 1.6 mm PCB**. Requires the specified PCB cutout and separate underside/edge-clearance review; not a footprint substitute. |
-| **Pulse JXD1-1V07NL** | Integrated 10/100 magnetics; through-hole, with EMI fingers | **13.30 ±0.38 mm including upper EMI fingers**; exceeds 12.8 mm despite the 11.3 mm housing. Excluded. |
-| **Hanrun HR911105A / C12074** | Integrated 10/100 magnetics; through-hole | Previous selection; **13.3 mm drawing / 13.5 mm catalog** height exceeds 12.8 mm. Excluded. |
+The earlier **Pulse JXD1-1V17NL** fits the height limit but is **shielded**
+and has integrated magnetics/LEDs, so it is superseded by the unshielded jack
+plus external parts. The **JXD1-1V07NL** and **HR911105A** remain excluded
+for excessive installed height. The shielded recessed Taoglas alternative
+does not satisfy the new unshielded preference.
 
-The Taoglas assessment uses the mechanical drawing on page 5; its product
-page and PDF disagree about SMT versus THT, so the drawing must govern the
-mounting details. Integrated-magnetics options are available, so a plain RJ45
-with separate transformers is not needed for the present selection.
-[Taoglas drawing][ethernet-jack-alt], [Taoglas product page][ethernet-jack-alt-product],
-[previous Hanrun drawing][ethernet-jack-old-ds], [previous jack catalog][ethernet-jack-old-jlc].
+The expanded BOM separately enumerates magnetics, external LEDs, PHY bias,
+terminations, filtering, decoupling, hardware reset and protection candidates.
+These are initial support-circuit selections, to be reconciled against the
+completed schematic rather than treated as an already validated reference design.
 
 **RMII pin allocation**
 
@@ -1016,13 +1044,16 @@ for REF_CLK input mode**, and account for LED loads
 on strap pins. Fit MDIO bias and choose an MDC rate within the PHY limit.
 Poll link status over MDIO initially; a PHY-interrupt connection is optional.
 
-Use the jack's separate TX/RX center taps, terminations and shield/Bob-Smith
-connections according to the **Pulse/Microchip** diagrams. The Pulse jack has
-a different pinout from HR911105A; derive the symbol/footprint from its own
-drawing and verify the LAN8720A center-tap bias requirements. Check the integrated
-termination components before adding any duplicates. Route short, controlled-
-impedance MDI differential pairs and provide cable-side ESD with a reviewed
-chassis/ground/isolation layout. During USB-only operation the PHY is off;
+Use the **external H1102NLT** TX/RX centre taps and the Microchip/Pulse
+reference circuits. Fit PHY-side terminations, bias/bypass capacitors and a
+separate cable common-mode termination network as required; these are no
+longer hidden inside a MagJack. There is **no RJ45 shield terminal**.
+Review the chassis/ESD reference, cable-side protection and isolation layout
+explicitly. Route short, controlled-impedance MDI pairs. The BOM proposes
+**TPS3808G33DBVR/C43698**, CT connected through **100 kΩ to VDD**, for
+hardware POR (300 ms typical, 180 ms minimum); PE5 can additionally assert
+the open-drain nRST net. This closes the support-part proposal without
+claiming electrical validation. During USB-only operation the PHY is off;
 release RMII/management/reset outputs and do not backfeed its rail. Ethernet
 remains on the **STM32 schematic sheet**, preserving the four-sheet plan.
 
@@ -1189,11 +1220,26 @@ and edge plating from this mechanical baseline. Transfer exact component
 identities into KiCad fields; add designators/footprints and placement data
 after capture.
 
+**Regulator power indication**
+
+Fit a separate power LED for **+1V2_FPGA**, **+3V3_HP** and **+3V3_MCU**,
+independent of firmware. Use the accepted **KT-0603R/C2286** and one
+**470 Ω/C23179** series resistor per LED. Each 3.3 V LED connects to its
+own output and GND. The red LED cannot run directly from 1.2 V: the proposed
+core indicator uses +3V3_HP -> 470 Ω -> LED -> MMBT2369ALT1G collector,
+emitter to GND, base from +1V2_FPGA through **1 kΩ/C21190**, and
+**100 kΩ/C25803** base-to-GND. This requires both core and HP 3.3 V power;
+it indicates rail presence, not precision power-good. Validate transistor
+drive, startup and visibility. All three LEDs and support parts are counted
+separately in the BOM. The power allowances retain margin for these loads.
+
 **MCU indication and SWD support**
 
-Use an **active-low PE4 status LED**. Select the LED/resistor current at
-capture. The MCU debug header is **ST-LINK 2 × 10, 2.54 mm, right angle**;
-select **Samtec TST-110-04-L-D-RA**. Implement its standard 20-pin electrical
+Use an **active-low PE4 status LED**. The accepted parts are KT-0603R/C2286 and
+470 Ω/C23179; validate brightness and GPIO current at capture.
+The MCU debug header is **ST-LINK 2 × 10, 2.54 mm, right angle**;
+the accepted header is **CONNFLY DS1013-20RSIB / TME ZL231-20KG**.
+Use its own drawing and footprint. Implement the standard 20-pin electrical
 allocation for **SWD only**:
 
 | Header pin(s) | Connection |
@@ -1455,13 +1501,13 @@ grounded and single configuration file above are the current design.
 | H02 | 3.2.6 / 3.3.9 | Size the wire-wrap area and choose posts/external connector contacts, using the fixed 1.6 mm pad / 0.8 mm drill geometry. Allocate fitted AUX1/AUX2 and spare RS-232 nodes in the connector pinout; their application functions remain undefined. |
 | H03 | 3.2.1 / 3.3.1 | Validate the selected buck LC parts, effective capacitance, layout, FPGA power estimate, startup/thermal behavior and per-slot power path. Establish HP output/pendant currents and USB current/inrush/suspend policy. |
 | H04 | 3.2.7 / 3.3.7 | Validate reset gate/RC/button/diode operation and any additional rail supervision; verify PON/NRST/PROGRAM_B low levels, diode drops, flash readiness and USB-only startup without backpower or reset clamping. |
-| H05 | 3.2.2 / 3.3.2 | Qualify the shared 50 MHz oscillator/fan-out and select the 8 MHz crystal/load capacitors; verify HSE/USB clock startup. Decide whether RTC crystal/battery support is needed. |
-| H06 | 3.3.8 | Verify RMII timing/jitter with the shared oscillator/fan-out; finalize PHY reset, straps, MDIO bias, Pulse jack pinout/center-tap bias, MDI/ESD/shield network, LED wiring/current and 10/100 current measurements. |
+| H05 | 3.2.2 / 3.3.2 | Qualify the shared 50 MHz oscillator/fan-out and proposed 8 MHz crystal/load capacitors; verify HSE/USB clock startup. Decide whether RTC crystal/battery support is needed. |
+| H06 | 3.3.8 | Verify RMII timing/jitter with the shared oscillator/fan-out; confirm MTJ-885X1 TME orderability and maximum height; validate H1102NLT external magnetics/centre-tap bias, proposed hardware POR, straps, MDIO bias, cable termination/ESD/isolation network, external LED wiring/current and 10/100 current measurements. |
 | H07 | 3.2.3 | Choose INIT_B/DONE/flash bias values and header footprint; verify startup pull-ups, bitstream pin settings and inactive HP states through reset, configuration and JTAG bridge operation. |
 | H08 | 3.2.5 | Validate receiver/driver thresholds, rise/fall times, transistor/ACT loading, resistor package dissipation and HP timing under real loads. |
 | H09 | 3.3.3 / 3.3.4 | Finalize USB/SD footprints, ESD/ground routing and any SD power switching; verify PB0 divider tolerances/leakage and SD switch behavior. |
 | H10 | 3.3.5 | Finalize the selected 4P4C jack placement, numbered pinout and cable; set baud rate and protected +5 V budget. Allocate spare RS-232 channel connector contacts and validate receiver level translation, power-domain isolation and all loaded drivers. |
-| H11 | 3.4 | Select both LED/resistor parts and currents; complete component designators, assembly footprints, auxiliary bypass counts and debugger/pendant mating clearances. |
+| H11 | 3.4 | Validate currents and visibility for the accepted LEDs and three regulator indicators; reconcile all provisional support quantities and exact parts against the completed schematic; finish component designators, assembly footprints and debugger/pendant mating clearances. Confirm JLCPCB orderability and all TME through-hole parts before purchase. |
 
 ### 5.2 Software and validation
 
@@ -1587,7 +1633,7 @@ FPGA/receiver/driver channels; RUN drive remains inactive in the current image.
 [an2606]: https://www.st.com/resource/en/application_note/an2606-stm32-microcontroller-system-memory-boot-mode-stmicroelectronics.pdf#page=161
 [gd-flash]: https://datasheet.lcsc.com/datasheet/pdf/6b8a460d13f4182b5e51681bc7a2ff41.pdf
 [sd-holder]: https://datasheet.lcsc.com/datasheet/pdf/62635050394eda24b10fdd0591981087.pdf
-[usb-connector]: https://jlcpcb.com/partdetail/C165948
+[usb-connector]: https://jlcpcb.com/partdetail/Korean_HropartsElec-TYPE_C_31_M12/C165948
 [usb-esd]: https://www.lcsc.com/product-detail/C21713975.html
 
 [buck]: https://www.ti.com/lit/ds/symlink/tlv62569.pdf
@@ -1607,11 +1653,18 @@ FPGA/receiver/driver channels; RUN drive remains inactive in the current image.
 [usb-vbus]: https://www.st.com/resource/en/application_note/an4879-introduction-to-usb-hardware-and-pcb-guidelines-using-stm32-mcus-stmicroelectronics.pdf
 
 [clock-buffer]: https://www.ti.com/lit/ds/symlink/cdclvc1104.pdf
-[pendant-jack]: https://www.te.com/en/product-1-1705949-1.html
+[pendant-jack]: https://www.molex.com/en-us/products/part-detail/955012441?display=pdf&download=true
+[pendant-jack-tme]: https://www.tme.eu/en/details/mx-95501-2441/rj-connectors/molex/95501-2441/
 [pendant-jack-alt]: https://www.te.com/en/product-215875-1.html
 [pendant-jack-old]: https://www.we-online.com/components/products/datasheet/615004143821.pdf
 [serial-ds]: https://www.ti.com/lit/ds/symlink/sn75185.pdf
 [serial-exp-buffer]: https://www.ti.com/lit/ds/symlink/sn74lvc125a.pdf
 [reset-gate]: https://www.ti.com/lit/ds/symlink/sn74lvc1g32.pdf
 [stlink]: https://www.st.com/resource/en/user_manual/um1075-stlink-v2-in-circuit-debugger-stlink-v2-1-stlink-v2-ct-stlink-v3-pg00061083.pdf
-[swd-header]: https://www.samtec.com/products/tst-110-04-l-d-ra
+[swd-header]: https://www.tme.eu/en/details/zl231-20kg/idc-connectors/connfly/ds1013-20rsib/
+
+[ethernet-jack-tme]: https://www.tme.eu/en/details/mtj-885x1/rj-connectors/adam-tech/
+[ethernet-jack-catalog]: https://app.adam-tech.com/resources/download/65/ecatalog-2025-1.pdf
+[ethernet-magnetics-jlc]: https://jlcpcb.com/partdetail/PulseElec-Pulse_ElecH1102NLT/C18584
+[ethernet-magnetics-product]: https://productfinder.pulseeng.com/product/H1102NL
+[ethernet-magnetics-ds]: https://productfinder.pulseeng.com/doc_type/WEB301/doc_num/H1102NL/doc_part/H1102NL.pdf

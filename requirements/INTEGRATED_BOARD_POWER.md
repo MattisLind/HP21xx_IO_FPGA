@@ -1,6 +1,6 @@
 # Integrated-board power calculation and component selection
 
-Revision **0.6 — 2026-11-01 — for review**. Companion to
+Revision **0.8 — 2026-11-08 — for review**. Companion to
 [INTEGRATED_BOARD_DESIGN.md](INTEGRATED_BOARD_DESIGN.md).
 
 The HP supply ratings supplied by the user are **4.85 V / 50 A** and
@@ -81,7 +81,7 @@ voltage as zero: `I = N × V / R`. This overestimates current slightly.
 | Configuration flash, including programming | GD25Q16E industrial-grade program/erase maximum | 25 mA |
 | Shared oscillator plus fan-out | Source and three buffered 50 MHz branches; see section 9 | 50 mA |
 | FPGA LED | Allocation; final resistor depends on LED voltage/brightness | 5 mA |
-| Other bias, support and expansion reserve | Allocation | 25 mA |
+| Other bias, support and expansion reserve | Includes about 6 mA for HP 3.3V and core-presence power LED branches | 25 mA |
 | Existing FPGA/interface subtotal | Before Ethernet | **1,013.4 mA** |
 | Ethernet PHY, magnetics drive and LEDs | New engineering allowance; see section 7 | **200 mA** |
 | **Total shared HP-side 3.3 V rail** | Including Ethernet | **1,213.4 mA ≈ 1.21 A** |
@@ -133,9 +133,9 @@ transient validation. [TI design procedure, sections 8.2.2.2–8.2.2.5][buck-ds]
 | --- | --- | --- |
 | Inductor | **Bourns SRP5030T-2R2M/C1329375**, 2.2 µH ±20%, shielded, 5.7 × 5.2 mm, 3.0 mm maximum height | 1 / **3** |
 | Input ceramic | **Murata GRM21BR71A475KA73L/C86039**, 4.7 µF, 10 V, X7R, ±10%, 0805 | 1 / **3** |
-| Input HF bypass | **Samsung CL10B104KB8NNNC/C1591**, 100 nF, 50 V, X7R, ±10%, 0603 | 1 / **3** |
+| Input HF bypass | **YAGEO CC0603KRX7R9BB104/C14663**, 100 nF, 50 V, X7R, ±10%, 0603 | 1 / **3** |
 | Output ceramic | **Samsung CL31A226KAHNNNE/C12891**, 22 µF, 25 V, X5R, ±10%, 1206 | 1 / **3** |
-| EN link | **Yageo RC0603JR-070RL**, 0 Ω, 0603, EN to that stage's VIN | 1 / **3** |
+| EN link | **UNI-ROYAL 0603WAF0000T5E/C21189**, 0 Ω, 0603, EN to that stage's VIN | 1 / **3** |
 | Optional feed-forward position | Small capacitor footprint across upper feedback resistor, **DNP initially** | 1 footprint per stage |
 
 The 2.2 µH / 22 µF nominal combination is in TI's validated LC matrix for
@@ -183,10 +183,10 @@ output overshoot, load steps and cross-domain reset sequencing on the PCB.
 ### 3.3 Local MCU and reset supply support
 
 At the MCU use **CL10A225KO8NNNC/C23630**, 2.2 µF/16 V X5R, at each VCAP
-pin, plus **CL10B104KB8NNNC/C1591** at each VDD and a local **4.7 µF
+pin, plus **CC0603KRX7R9BB104/C14663** at each VDD and a local **4.7 µF
 GRM21BR71A475KA73L** bulk capacitor. Apply the ST VDDA/VREF decoupling rules.
-At MCU_NRST fit **RC0603FR-0710KL, 10 kΩ to +3V3_MCU**, **100 nF C1591 to
-GND**, reset button and BAT54 anode. The BAT54 cathode connects to the PON
+At MCU_NRST fit **10 kΩ (the BOM proposes UNI-ROYAL C25804)** to +3V3_MCU,
+**100 nF C14663 to GND**, reset button and BAT54 anode. The BAT54 cathode connects to the PON
 branch through **SN74LVC1G32DBVR** on +3V3_MCU, implementing
 `PON_RESET_N OR HP_ABSENT`; use a local 100 nF bypass at the gate.
 The local RC does not release a reset held low by an unpowered PON branch.
@@ -198,7 +198,8 @@ The +5 V driver base-bias load is separate from the 3.3 V pull-ups. With a
 provisional 0.4 V Schottky/output clamp, 24 inactive channels draw
 `24 × (4.85 − 0.4) / 220 = 0.485 A` directly from HP +5 V. A 220 Ω resistor
 then dissipates about **90 mW**. Do not blindly copy a 62.5 mW 0402 footprint
-for these resistors; use 0805 and verify its rated power/derating.
+for these resistors; the expanded BOM proposes 1206 / 0.25 W for
+additional margin. Verify hot derating.
 Include the ACT gate sink currents and transistor loading in the circuit
 review. The TI ACT04 data sheet permits 200 mA continuous package VCC/GND
 current and specifies TTL inputs, but the actual chosen manufacturer's part
@@ -289,12 +290,16 @@ Implement its part-specific programming support. USB ESD **C21713975** is
 ## 7. Ethernet allowance and implementation checks
 
 Allocate **200 mA at 3.3 V** for the LAN8720A, magnetics drive,
-jack LEDs and margin. The shared clock has a separate 50 mA allocation.
+external board LEDs and margin. The shared clock has a separate 50 mA allocation.
 The PHY's REF_CLK-input-mode table
 lists 49 mA maximum chip current for 100BASE-TX; magnetics add about 41 mA
 typically. At 10BASE-T, the corresponding figures are 24 mA maximum chip
 current and about 100 mA typical magnetics current. The latter is the larger
 load. These figures exclude LEDs; the allocation includes LED current and margin.
+The jack is now the TME-sourced unshielded **MTJ-885X1** with external
+**Pulse H1102NLT/C18584** transformer/choke module and two external LEDs.
+The load allowance is retained; verify it with the new line-side network.
+
 The 200 mA total is an engineering allocation mixing maxima and typical
 magnetics figures, not a guaranteed worst-case specification. Verify it with
 both link speeds, traffic and the chosen LED/termination network.
@@ -344,3 +349,19 @@ and jitter on the final routing. [TI clock buffer][clock-ds],
 [inductor-ds]: https://www.bourns.com/docs/Product-Datasheets/SRP5030T.pdf
 [clock-ds]: https://www.ti.com/lit/ds/symlink/cdclvc1104.pdf
 [reset-ds]: https://www.ti.com/lit/ds/symlink/sn74lvc1g32.pdf
+
+## 10. Accepted regulator power indicators
+
+Fit three **KT-0603R/C2286** LEDs, each with its own **470 Ω/C23179**,
+for +3V3_HP, +3V3_MCU and +1V2_FPGA. Each 3.3 V output drives its own
+indicator directly. The 1.2 V indicator instead uses an NPN sensing circuit
+powered from +3V3_HP: LED/resistor to collector, emitter to GND, 1 kΩ from
+core rail to base and 100 kΩ base-to-GND. Reuse MMBT2369ALT1G/C94404.
+This LED requires the HP 3.3 V rail and signals presence rather than a
+calibrated 1.2 V tolerance threshold.
+
+Allocate about 3 mA per LED branch and up to 0.6 mA base drive from 1.2 V.
+The two HP-side LED branches fit within the existing 25 mA support reserve;
+the MCU LED branch fits within its existing 50 mA support allowance. The
+1 A provisional core allowance includes the small sensing load. The rail
+planning totals are retained; verify actual brightness, VBE/gain and startup.
